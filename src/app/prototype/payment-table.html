@@ -1,0 +1,33 @@
+<div class="table-scroll">
+  <table>
+    <caption class="visually-hidden">
+      Syntetiske betalinger
+    </caption>
+    <thead>
+      @for (group of table.getHeaderGroups(); track group.id) {
+        <tr>
+          @for (header of group.headers; track header.id) {
+            <th scope="col">
+              <ng-container *flexRenderHeader="header; let value">
+                {{ value }}
+              </ng-container>
+            </th>
+          }
+        </tr>
+      }
+    </thead>
+    <tbody>
+      @for (row of table.getRowModel().rows; track row.id) {
+        <tr>
+          @for (cell of row.getAllCells(); track cell.id) {
+            <td>
+              <ng-container *flexRenderCell="cell; let value">
+                {{ value }}
+              </ng-container>
+            </td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

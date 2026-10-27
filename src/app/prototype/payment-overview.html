@@ -1,0 +1,163 @@
+<ng-template #mockNotice>
+  <aside class="mock-notice" role="note">
+    <strong>Mockdata</strong>
+    <span>
+      Alle betalinger, konti og modtagere er syntetiske. Ingen rigtige
+      bankdata vises.
+    </span>
+  </aside>
+</ng-template>
+
+<ng-template #dataControls>
+  <div class="count-field">
+    <label for="payment-count">Antal betalinger</label>
+    <input
+      id="payment-count"
+      kirby-input
+      type="number"
+      min="1"
+      max="100000"
+      step="1"
+      inputmode="numeric"
+      [value]="requestedCount()"
+      [attr.aria-describedby]="
+        countError() ? 'count-hint count-error' : 'count-hint'
+      "
+      [attr.aria-invalid]="countError() ? 'true' : null"
+      (input)="updateRequestedCount($event)"
+    />
+    <span id="count-hint" class="field-hint">Hele tal fra 1 til 100.000</span>
+    @if (countError(); as error) {
+      <span id="count-error" class="field-error" role="alert">{{ error }}</span>
+    }
+  </div>
+  <button kirby-button type="button" (click)="generate()">
+    Generér data
+  </button>
+</ng-template>
+
+<ng-template #largeCountWarning>
+  @if (payments().length >= 10_000) {
+    <p class="large-count-warning" role="note">
+      Store datasæt kan gøre browseren langsom. Brug browserens DevTools til at
+      måle tid og hukommelse.
+    </p>
+  }
+</ng-template>
+
+@switch (variant()) {
+  @case ('A') {
+    <main class="prototype-shell variant-a">
+      <div class="page-frame">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Betalinger</p>
+            <h1>Betalingsoversigt</h1>
+          </div>
+          <div class="build-labels">
+            <span class="prototype-label">Prototype</span>
+            <span>Kirby 12.0.0</span>
+            <span>Demo {{ demoCommit }}</span>
+          </div>
+        </header>
+
+        <ng-container *ngTemplateOutlet="mockNotice" />
+
+        <section class="generator-panel" aria-label="Generér datasæt">
+          <ng-container *ngTemplateOutlet="dataControls" />
+        </section>
+
+        <div class="result-summary">
+          {{ formatCount(payments().length) }} syntetiske betalinger
+        </div>
+        <ng-container *ngTemplateOutlet="largeCountWarning" />
+        <app-prototype-payment-table [payments]="payments()" />
+      </div>
+    </main>
+  }
+  @case ('B') {
+    <main class="prototype-shell variant-b">
+      <div class="page-frame">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Betalinger</p>
+            <h1>Betalingsoversigt</h1>
+          </div>
+          <div class="build-labels">
+            <span class="prototype-label">Prototype</span>
+            <span>Kirby 12.0.0</span>
+            <span>Demo {{ demoCommit }}</span>
+          </div>
+        </header>
+
+        <div class="split-layout">
+          <aside class="control-rail">
+            <h2>Datasæt</h2>
+            <ng-container *ngTemplateOutlet="mockNotice" />
+            <section class="generator-panel" aria-label="Generér datasæt">
+              <ng-container *ngTemplateOutlet="dataControls" />
+            </section>
+          </aside>
+
+          <section class="table-panel" aria-label="Betalingsdata">
+            <div class="result-summary">
+              {{ formatCount(payments().length) }} syntetiske betalinger
+            </div>
+            <ng-container *ngTemplateOutlet="largeCountWarning" />
+            <app-prototype-payment-table [payments]="payments()" />
+          </section>
+        </div>
+      </div>
+    </main>
+  }
+  @case ('C') {
+    <main class="prototype-shell variant-c">
+      <div class="page-frame">
+        <header class="compact-header">
+          <div class="compact-title">
+            <p class="eyebrow">Betalinger</p>
+            <h1>Betalingsoversigt</h1>
+            <ng-container *ngTemplateOutlet="mockNotice" />
+          </div>
+          <div class="build-labels">
+            <span class="prototype-label">Prototype</span>
+            <span>Kirby 12.0.0</span>
+            <span>Demo {{ demoCommit }}</span>
+          </div>
+        </header>
+
+        <section class="compact-generator" aria-label="Generér datasæt">
+          <ng-container *ngTemplateOutlet="dataControls" />
+          <span class="result-summary">
+            {{ formatCount(payments().length) }} syntetiske betalinger
+          </span>
+        </section>
+
+        <ng-container *ngTemplateOutlet="largeCountWarning" />
+        <app-prototype-payment-table [payments]="payments()" />
+      </div>
+    </main>
+  }
+}
+
+@if (showVariantSwitcher) {
+  <nav class="prototype-switcher" aria-label="Prototype-layout">
+    <button
+      type="button"
+      aria-label="Forrige layout"
+      (click)="selectAdjacentVariant(-1)"
+    >
+      ←
+    </button>
+    <span aria-live="polite">
+      {{ variant() }} · {{ variantName() }}
+    </span>
+    <button
+      type="button"
+      aria-label="Næste layout"
+      (click)="selectAdjacentVariant(1)"
+    >
+      →
+    </button>
+  </nav>
+}
