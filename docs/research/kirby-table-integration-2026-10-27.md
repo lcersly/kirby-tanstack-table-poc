@@ -1,8 +1,8 @@
 # Kirby table integration research
 
 **Checked:** 2026-10-27
-**Scope:** Public Kirby releases and source relevant to a desktop Payments-tab table in this public personal POC.
-**Conclusion:** The requested premise is not established by the public Kirby package or source: no Kirby release or preview was found that integrates TanStack Table v9. Kirby's documented implementation is a styled native HTML table with a small sortable-header component, not a table engine.
+**Scope:** Public Kirby and TanStack packages relevant to a desktop Payments-tab table in this public personal POC.
+**Conclusion:** No public Kirby release or preview was found that integrates TanStack Table v9. The user has decided to use TanStack Table directly as a temporary data renderer, then replace it with Kirby's implementation when available. That temporary choice is separate from the verified Kirby API.
 
 ## Findings
 
@@ -11,6 +11,8 @@
 The public package `@kirbydesign/designsystem` is published to npm. At the time checked, `12.0.0` was the `latest` tag; the registry also exposed `11.10.0-rc.0` as `next`, `11.11.0-dev-9d936c8` as `dev`, and `11.3.1-8822decb1` as `pr`. The public registry metadata contains 928 versions. No TanStack dependency was present in the inspected package metadata, and searches of published-version descriptions/keywords and the public Kirby repository found no TanStack Table integration.
 
 The actual Angular adapter for TanStack Table v9 is a separate package, `@tanstack/angular-table` (`9.3.1` was the `latest` version checked). It is not a Kirby package and is not listed as a dependency or peer dependency of Kirby. Treating it as Kirby's table would misstate the integration contract.
+
+The temporary implementation decision is user-directed: use that direct TanStack adapter only to render synthetic data in the simplest HTML table, with no table interactions or other table functionality. Remove it and use Kirby's table when that implementation becomes available. Keep Kirby for surrounding UI where applicable. This decision does not establish which surrounding Kirby elements to use or agree the full Payments-tab behavior.
 
 ### Kirby's current table API
 
@@ -28,15 +30,21 @@ The published `@kirbydesign/designsystem@12.0.0` metadata declares Angular `^21.
 
 These are the peer requirements of the latest core package checked, not evidence that it supplies the requested TanStack integration. Earlier versions and previews likewise did not surface such an integration in the registry metadata or public source/issue searches performed for this research.
 
+For the temporary choice, npm metadata for `@tanstack/angular-table@9.3.1` declares `@angular/core: >=19` as a peer dependency. Its dependencies include `@tanstack/table-core: 9.3.1`, `@tanstack/angular-store: ^0.11.2`, and `tslib: ^2.8.1`. The package license metadata is MIT. The supported Angular ranges overlap with Kirby 12 at Angular 21 and 22. This is package metadata compatibility, not a build or runtime test in this POC.
+
+The official Angular quick start for v9 uses `injectTable`, `tableFeatures({})`, `ColumnDef`, and the `FlexRender` directives to render table headers and cells. Its basic example registers no optional features and renders with `table.getHeaderGroups()`, `table.getRowModel().rows`, and `row.getAllCells()`. A read-only data renderer can use that minimal feature set without adding sorting, filtering, pagination, selection, or action handlers. Do not add these features to the temporary table.
+
 ### Public use and licensing
 
 The core `@kirbydesign/designsystem` package metadata and the public `kirbydesign/designsystem` repository identify the license as MIT. Its public npm distribution and source can therefore be considered for this public repository and browser bundle under the MIT license terms, including its notice and warranty conditions. No package-specific restriction against that use was found in the public sources checked.
 
-The TanStack Angular adapter is also published separately under MIT, but using it would be a distinct direct TanStack integration, not the requested Kirby-provided table. No internal package artifact or internal documentation is included in this report.
+The TanStack Angular adapter is also published separately under MIT, but using it is a distinct direct TanStack integration, not a Kirby-provided table. No internal package artifact or internal documentation is included in this report.
 
-## Blocker and needed reference
+## Decision and deferred scope
 
-The public evidence does not identify a Kirby release, preview, package source, or API for a TanStack Table v9-based table. If the POC requirement refers to a planned, unpublished, or otherwise non-public Kirby integration, the missing item is the exact authoritative reference: a Kirby package name and version/channel plus its release note, source change, or official API documentation. The issue should remain open until that reference is supplied or the requirement is deliberately revised. Do not implement an invented Kirby API or present direct `@tanstack/angular-table` usage as Kirby integration.
+The user resolved the missing-release blocker on 2026-10-27 by choosing the temporary direct TanStack data renderer described above. No Kirby package name, version, or API for the future replacement has been established. Do not implement an invented Kirby API or present direct `@tanstack/angular-table` usage as Kirby integration.
+
+The full Payments-tab behavior remains deferred. Sorting, filtering, selection, paging, actions, and other table interactions are not requirements for the temporary table and are not agreed or implemented. Future scope must be decided separately for the Kirby table when it becomes available. Which Kirby components to use around the temporary table also remains open.
 
 The public Cookbook's likely data-table pages at `/home/showcase/data-table` and `/components/data-table` returned 404 during this check, so current official usage documentation at another URL remains unverified.
 
@@ -49,4 +57,5 @@ All sources below were checked on 2026-10-27.
 - [Kirby design system repository](https://github.com/kirbydesign/designsystem), [repository license](https://github.com/kirbydesign/designsystem/blob/develop/LICENSE), [migration guide](https://github.com/kirbydesign/designsystem/blob/develop/MIGRATION.md), and [`TableSortableComponent` source](https://github.com/kirbydesign/designsystem/blob/develop/libs/designsystem/data-table/src/sortable/sortable.component.ts)
 - [Kirby data-table issue #2494](https://github.com/kirbydesign/designsystem/issues/2494) and [implementation PR #2517](https://github.com/kirbydesign/designsystem/pull/2517)
 - [`@tanstack/angular-table` npm package](https://www.npmjs.com/package/@tanstack/angular-table) and [version 9.3.1 metadata](https://registry.npmjs.org/@tanstack%2fangular-table/9.3.1)
+- [TanStack Table v9 Angular quick start](https://tanstack.com/table/latest/docs/framework/angular/quick-start) and [Angular v9 migration guide](https://tanstack.com/table/latest/docs/framework/angular/guide/migrating)
 - [Kirby Cookbook](https://cookbook.kirby.design) (the two candidate data-table routes above returned 404)
