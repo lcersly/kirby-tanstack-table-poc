@@ -297,6 +297,24 @@ These are follow-up operations, not authorizations or commands executed by this 
 - Approve a bounded first preview/live deployment and recovery test, its public URL, retention settings, and any later rollback. First verify root/deep-link behavior, version identity, headers, and recovery from an upload failure.
 - Later, approve the exact custom domain and DNS/certificate changes. Verify ownership and any registrar costs before connecting it.
 
+## Verification against repository Firebase skills
+
+Method: the runtime skill catalog did not list the repository-local skills, so their definitions were read directly from `.agents/skills/` on `origin/main` (commit `a3235f5`). Read: `firebase-hosting-basics` (with `configuration.md`, `deploying.md`), `firebase-app-hosting-basics`, and `firebase-basics`. The auth and Firestore skills are out of scope.
+
+Confirmed by the skills, with no conflict found:
+
+- Static sites and SPAs without SSR belong on classic Hosting; App Hosting is for SSR/ISR frameworks and requires Blaze.
+- `firebase.json` `public` names the deploy directory, and a `** -> /index.html` rewrite serves SPA routes.
+- `firebase deploy --only hosting` publishes to the default `web.app` and `firebaseapp.com` sites.
+- Preview channels (7-day default expiry) and `hosting:clone SOURCE_SITE:CHANNEL TARGET_SITE:live` promote a version to live without rebuilding.
+- The Hosting skill lists GitHub Actions automation and custom domains as supported features.
+
+Not covered by the skills, so they rest only on the cited primary sources above: Spark quotas, WIF with CLI ADC, `action-hosting-deploy` authentication, IAM roles, WIF billing, failed-deploy behavior, retained-version rollback, and custom-domain limits.
+
+Clarifications: the skills invoke the CLI as `npx -y firebase-tools@latest`, which is unpinned; a CI workflow should pin a reviewed version. The `firebase-basics` skill requires pausing to ask for an existing project ID or approval to create one, which matches the later prerequisites above. The App Hosting skill's phrase "Angular" means SSR Angular, so it does not apply to this static output.
+
+Account-specific unknowns are unchanged: project existence and selection, plan and billing, IAM, exact minimum roles, and whether WIF setup can avoid billing.
+
 ## Sources
 
 Every source below was retrieved on **2026-10-27**. All are public, first-party documentation or official integration/CLI source. Google Cloud URLs may redirect to `docs.cloud.google.com`. Quotes above are short excerpts; other findings paraphrase the cited source. Source inspection is not an account-backed integration test.
