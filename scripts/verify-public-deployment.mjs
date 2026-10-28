@@ -1,26 +1,17 @@
 import console from 'node:console';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import process from 'node:process';
 import { URL, fileURLToPath } from 'node:url';
 
+const siteUrl = new URL('https://kirby-tanstack-table-poc.web.app/');
+const fetch = globalThis.fetch;
+
 export async function verifyPublicDeployment({
   siteUrl,
-  expectedSourceSha,
-  expectedCommit,
-  expectedKirbyVersion,
+  expectedIdentity,
   fetchImpl = globalThis.fetch,
 }) {
-  const requiredValues = [
-    ['expected source SHA', expectedSourceSha],
-    ['expected commit', expectedCommit],
-    ['expected Kirby version', expectedKirbyVersion],
-  ];
-
-  for (const [name, value] of requiredValues) {
-    if (!value) {
-      throw new Error(`Missing required public deployment value: ${name}.`);
-    }
-  }
-
   async function getPublicPage(url) {
     const response = await fetchImpl(url);
     if (!response.ok || !response.headers.get('content-type')?.includes('text/html')) {
@@ -48,11 +39,11 @@ export async function verifyPublicDeployment({
   const identity = await identityResponse.json();
   if (
     !identity ||
-    identity.sourceCommit !== expectedSourceSha ||
-    identity.shortCommit !== expectedCommit ||
-    identity.kirbyVersion !== expectedKirbyVersion
+    identity.sourceCommit !== expectedIdentity.sourceCommit ||
+    identity.shortCommit !== expectedIdentity.shortCommit ||
+    identity.kirbyVersion !== expectedIdentity.kirbyVersion
   ) {
-    throw new Error('The public release identity does not match the selected CI artifact.');
+    throw new Error('The public release identity does not match the checked CI artifact.');
   }
 
   const scriptSources = Array.from(
@@ -97,8 +88,8 @@ export async function verifyPublicDeployment({
   const applicationCode = applicationScripts.join('\n');
 
   if (
-    !applicationCode.includes(expectedCommit) ||
-    !applicationCode.includes(expectedKirbyVersion) ||
+    !applicationCode.includes(expectedIdentity.shortCommit) ||
+    !applicationCode.includes(expectedIdentity.kirbyVersion) ||
     !applicationCode.includes('Kirby ') ||
     !applicationCode.includes('Demo ')
   ) {
@@ -108,15 +99,61 @@ export async function verifyPublicDeployment({
   }
 }
 
-async function runCli() {
-  await verifyPublicDeployment({
-    siteUrl: new URL('https://kirby-tanstack-table-poc.web.app/'),
-    expectedSourceSha: process.env.EXPECTED_SOURCE_SHA,
-    expectedCommit: process.env.EXPECTED_COMMIT,
-    expectedKirbyVersion: process.env.EXPECTED_KIRBY_VERSION,
-  });
+async function inspectLiveRelease() {
+  const rootResponse = await fetch(siteUrl);
+  const identityResponse = await fetch(new URL('/demo-version.json', siteUrl));
+  if (identityResponse.status === 404) {
+    console.info(
+      `Observed Firebase root HTTP ${rootResponse.status}; no public demo release marker exists.`,
+    );
+    return;
+  }
+
+  if (!identityResponse.ok) {
+    throw new Error(
+      `Could not inspect the live Firebase release marker (HTTP ${identityResponse.status}).`,
+    );
+  }
+
+  const identity = await identityResponse.json();
+  if (
+    !identity ||
+    typeof identity.sourceCommit !== 'string' ||
+    !/^[0-9a-f]{40}$/.test(identity.sourceCommit) ||
+    typeof identity.shortCommit !== 'string' ||
+    !identity.sourceCommit.startsWith(identity.shortCommit) ||
+    typeof identity.kirbyVersion !== 'string'
+  ) {
+    throw new Error('The live Firebase release marker is invalid.');
+  }
+
   console.info(
-    `Verified unauthenticated root and payment deep link for commit ${process.env.EXPECTED_COMMIT} with Kirby ${process.env.EXPECTED_KIRBY_VERSION}.`,
+    `Observed Firebase root HTTP ${rootResponse.status}; live demo commit ${identity.shortCommit} (${identity.sourceCommit}), Kirby ${identity.kirbyVersion}.`,
+  );
+}
+
+async function runCli() {
+  const mode = process.argv[2];
+  if (mode === 'inspect') {
+    await inspectLiveRelease();
+    return;
+  }
+  if (mode !== 'verify') {
+    throw new Error('Expected mode: verify or inspect.');
+  }
+
+  const artifactMarker = resolve('dist/kirby-payment-overview-prototype/browser/demo-version.json');
+  const expectedIdentity = JSON.parse(readFileSync(artifactMarker, 'utf8'));
+  if (
+    typeof expectedIdentity.sourceCommit !== 'string' ||
+    !/^[0-9a-f]{40}$/.test(expectedIdentity.sourceCommit) ||
+    !expectedIdentity.sourceCommit.startsWith(expectedIdentity.shortCommit)
+  ) {
+    throw new Error('The checked artifact contains an invalid demo version marker.');
+  }
+  await verifyPublicDeployment({ siteUrl, expectedIdentity });
+  console.info(
+    `Verified public root and payment deep link for commit ${expectedIdentity.shortCommit} with Kirby ${expectedIdentity.kirbyVersion}.`,
   );
 }
 

@@ -24,12 +24,12 @@ Build with `npm run build`.
 
 The page shows the Kirby version read from the installed
 `@kirbydesign/designsystem` package and the short revision of the source commit.
-Main-branch CI uploads the production browser output as
-`payment-demo-<commit-sha>`. Its `artifact-provenance.json` records the source
-commit, successful workflow run, and installed Kirby version. CI does not
-deploy the artifact automatically. The manual Firebase release path and
-rollback procedure are documented in
+After checks pass, main-branch CI deploys its checked browser artifact
+automatically to Firebase Hosting. The workflow and local deployment command
+are documented in
 [docs/firebase-hosting.md](docs/firebase-hosting.md).
+
+To publish a local build manually, use `npm run deploy:production`.
 
 ## Checks and dependency upgrades
 

@@ -1,7 +1,8 @@
 {
   "hosting": {
     "public": "dist/kirby-payment-overview-prototype/browser",
-    "ignore": ["**/.*", "**/node_modules/**", "**/*.map", "**/artifact-provenance.json"],
+    "site": "kirby-tanstack-table-poc",
+    "ignore": ["**/.*", "**/node_modules/**", "**/*.map"],
     "rewrites": [
       {
         "source": "**",

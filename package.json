@@ -6,9 +6,10 @@
     "start": "node scripts/write-demo-commit.mjs && ng serve",
     "prototype": "node scripts/write-demo-commit.mjs && ng serve",
     "build": "node scripts/write-demo-commit.mjs && ng build",
+    "deploy:production": "npm run build && npx --yes firebase-tools@15.34.1 deploy --only hosting --project kirby-tanstack-table-poc --non-interactive",
     "watch": "node scripts/write-demo-commit.mjs && ng build --watch --configuration development",
     "lint": "eslint src scripts --max-warnings=0",
-    "test": "node scripts/write-demo-commit.mjs && ng test --no-watch --no-progress && node --test scripts/deploy-artifact.test.mjs",
+    "test": "node scripts/write-demo-commit.mjs && ng test --no-watch --no-progress && node --test scripts/verify-public-deployment.test.mjs",
     "test:watch": "node scripts/write-demo-commit.mjs && ng test"
   },
   "private": true,

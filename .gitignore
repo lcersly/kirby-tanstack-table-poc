@@ -6,6 +6,7 @@
 /out-tsc
 /bazel-out
 /src/app/prototype/demo-commit.generated.ts
+/public/demo-version.json
 
 # Node
 /node_modules
