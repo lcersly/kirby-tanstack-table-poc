@@ -9,7 +9,7 @@
     "watch": "node scripts/write-demo-commit.mjs && ng build --watch --configuration development",
     "lint": "eslint src scripts --max-warnings=0",
     "test": "node scripts/write-demo-commit.mjs && ng test --no-watch --no-progress",
-    "test:watch": "ng test"
+    "test:watch": "node scripts/write-demo-commit.mjs && ng test"
   },
   "private": true,
   "packageManager": "npm@11.16.0",
