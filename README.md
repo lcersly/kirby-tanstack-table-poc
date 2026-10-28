@@ -25,11 +25,9 @@ Build with `npm run build`.
 The page shows the Kirby version read from the installed
 `@kirbydesign/designsystem` package and the short revision of the source commit.
 After checks pass, main-branch CI deploys its checked browser artifact
-automatically to Firebase Hosting. The workflow and local deployment command
-are documented in
+automatically to Firebase Hosting. The deployment path and Firebase Console
+rollback instructions are documented in
 [docs/firebase-hosting.md](docs/firebase-hosting.md).
-
-To publish a local build manually, use `npm run deploy:production`.
 
 ## Checks and dependency upgrades
 
