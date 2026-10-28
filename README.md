@@ -10,7 +10,15 @@ Run the local preview with:
 npm run prototype
 ```
 
-Open `http://localhost:4200/prototype/payment-overview`. Compare layouts A, B,
+The persistent top bar switches between two independent playspaces:
+
+- **POC** at `http://localhost:4200/prototype/payment-overview` is the existing
+  payment overview. It remains the default when opening `/`.
+- **Table Playground** at `http://localhost:4200/prototype/table-playground` is
+  an empty page for UX/UI table experiments. Its component is
+  `src/app/table-playground.ts`; it does not share the POC's table or controls.
+
+In the POC, compare layouts A, B,
 and C with the floating switcher, the left and right arrow keys, or the
 `?variant=A`, `?variant=B`, and `?variant=C` query parameter.
 
