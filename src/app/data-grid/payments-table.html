@@ -1,0 +1,452 @@
+<ng-template #statusTpl let-p>
+  @if (statusAsFlag(p.status)) {
+    <kirby-flag [size]="flagSize()" [themeColor]="statusColor(p.status)">{{ p.status }}</kirby-flag>
+  } @else if (cfg().statusStyle === 'flag') {
+    <span class="status-detail">{{ p.status }}</span>
+  } @else {
+    {{ p.status }}
+  }
+</ng-template>
+
+<ng-template #checkTpl let-p>
+  <app-recipient-check
+    [check]="p.recipientCheck"
+    [asFlag]="cfg().checkStyle === 'flag'"
+    [flagSize]="flagSize()"
+    [avatarSize]="avatarSize()"
+  ></app-recipient-check>
+</ng-template>
+
+<ng-template #actionsTpl let-p>
+  @switch (actionsDisplay()) {
+    @case ('menu') {
+      <div class="actions">
+        <kirby-menu
+          [buttonSize]="ButtonSize.SM"
+          placement="bottom-end"
+          [attr.aria-label]="'Handlinger for betaling til ' + p.recipient"
+        >
+          <kirby-item [disabled]="!canApprove(p)" (click)="approve(p)">Godkend</kirby-item>
+          <kirby-item [disabled]="!canStop(p)" (click)="stop(p)">Stop</kirby-item>
+          <kirby-item [disabled]="!canEdit(p)">Rediger</kirby-item>
+        </kirby-menu>
+      </div>
+    }
+    @default {
+      <div class="actions">
+        <button
+          kirby-button
+          size="sm"
+          attentionLevel="1"
+          [attr.title]="actionsDisplay() === 'icon' ? 'Godkend' : null"
+          [attr.aria-label]="'Godkend betaling til ' + p.recipient"
+          [disabled]="!canApprove(p)"
+          (click)="approve(p)"
+        >
+          @if (actionsDisplay() !== 'label') {
+            <kirby-icon name="checkmark-selected"></kirby-icon>
+          }
+          @if (actionsDisplay() !== 'icon') {
+            Godkend
+          }
+        </button>
+        <button
+          kirby-button
+          size="sm"
+          attentionLevel="3"
+          [attr.title]="actionsDisplay() === 'icon' ? 'Stop' : null"
+          [attr.aria-label]="'Stop betaling til ' + p.recipient"
+          [disabled]="!canStop(p)"
+          (click)="stop(p)"
+        >
+          @if (actionsDisplay() !== 'label') {
+            <kirby-icon name="close"></kirby-icon>
+          }
+          @if (actionsDisplay() !== 'icon') {
+            Stop
+          }
+        </button>
+        <button
+          kirby-button
+          size="sm"
+          attentionLevel="3"
+          [attr.title]="actionsDisplay() === 'icon' ? 'Rediger' : null"
+          [attr.aria-label]="'Rediger betaling til ' + p.recipient"
+          [disabled]="!canEdit(p)"
+        >
+          @if (actionsDisplay() !== 'label') {
+            <kirby-icon name="edit"></kirby-icon>
+          }
+          @if (actionsDisplay() !== 'icon') {
+            Rediger
+          }
+        </button>
+      </div>
+    }
+  }
+</ng-template>
+
+<ng-template #listTpl>
+@if (showCards()) {
+  <ul class="cards">
+    @for (p of displayRows(); track p.id) {
+      <li
+        class="card"
+        [class.selected]="isSelected(p)"
+        [class.clickable]="detailMode() !== 'none'"
+        [class.active-row]="detailId() === p.id"
+        (click)="openDetail(p, $event)"
+      >
+        <div class="card-top">
+          <kirby-checkbox
+[size]="cfg().checkboxSize"
+            [checked]="isSelected(p)"
+            (checkedChange)="toggleRow(p, $event)"
+            [attr.aria-label]="'Vælg betaling til ' + p.recipient"
+          ></kirby-checkbox>
+          <div class="card-main">
+            <div class="kirby-text-small-bold">{{ p.recipient }}</div>
+            <div class="kirby-text-small muted">
+              {{ formatDate(p.date) }} · {{ p.type }} · {{ p.subtype }}
+            </div>
+          </div>
+          <div class="card-amount kirby-text-small-bold">
+            {{ formatAmount(p.amount) }} <app-currency [code]="p.currency" [showFlag]="cfg().currencyStyle === 'flag'" [flagSize]="avatarSize()"></app-currency>
+          </div>
+        </div>
+        <div class="card-flags">
+          <ng-container *ngTemplateOutlet="statusTpl; context: { $implicit: p }"></ng-container>
+          <ng-container *ngTemplateOutlet="checkTpl; context: { $implicit: p }"></ng-container>
+        </div>
+        <div class="kirby-text-xsmall muted">
+          Fra {{ p.fromAccount }} ({{ p.accountOwner }})
+          @if (p.reference) {
+            · {{ p.reference }}
+          }
+        </div>
+        @if (pageMode()) {
+          <kirby-icon class="card-chevron" name="arrow-more" aria-hidden="true"></kirby-icon>
+        } @else {
+        <div class="card-actions">
+          <ng-container *ngTemplateOutlet="actionsTpl; context: { $implicit: p }"></ng-container>
+        </div>
+        }
+      </li>
+    }
+  </ul>
+} @else {
+  <div
+    class="table-scroll"
+    [class.sticky-header]="cfg().stickyHeader"
+    [class.pin-left]="pinLeft()"
+    [class.pin-right]="pinRight()"
+    [class.zebra]="cfg().zebra"
+    [class.col-dividers]="cfg().columnDividers"
+    [class.hl-cell]="cfg().highlight === 'cell'"
+    [class.is-stuck]="stuck()"
+    [class.sh-left]="shadowLeft()"
+    [class.sh-right]="shadowRight()"
+    (scroll)="updateShadows()"
+    [class.fit]="fitColumns()"
+    [class.wrap]="cfg().textHandling === 'wrap' && loading() !== 'virtual'"
+    [class.truncate]="cfg().textHandling === 'truncate'"
+    [attr.data-density]="cfg().density"
+  >
+    <table class="kirby-table">
+      <thead>
+        <tr>
+          <th class="col-select">
+            <kirby-checkbox
+[size]="cfg().checkboxSize"
+              [checked]="allSelected()"
+              [indeterminate]="someSelected()"
+              (checkedChange)="toggleAll($event)"
+              aria-label="Vælg alle betalinger"
+            ></kirby-checkbox>
+          </th>
+          @for (col of columns(); track col.key) {
+            <th
+              [attr.data-col]="col.key"
+              [class.fz-l]="frozenInfo()[col.key]?.side === 'left'"
+              [class.fz-r]="frozenInfo()[col.key]?.side === 'right'"
+              [class.fz-edge]="frozenInfo()[col.key]?.edge"
+              [style.left.px]="frozenInfo()[col.key]?.side === 'left' ? frozenInfo()[col.key]?.offset : null"
+              [style.right.px]="frozenInfo()[col.key]?.side === 'right' ? frozenInfo()[col.key]?.offset : null"
+              [class.align-right]="col.align === 'right'"
+              [style.width.px]="widthOf(col)"
+              [style.min-width.px]="widthOf(col)"
+              [attr.aria-sort]="
+                sortKey() === col.key ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : null
+              "
+            >
+              <span class="th-inner">
+                <button type="button" class="th-sort" (click)="sort(col.key)">
+                  <span>{{ col.label }}</span>
+                  @if (sortKey() === col.key) {
+                    <kirby-icon
+                      class="sort-icon"
+                      [name]="sortDirection() === 'asc' ? 'arrow-up-fill' : 'arrow-down-fill'"
+                    ></kirby-icon>
+                  }
+                </button>
+                <app-column-menu
+                  [column]="col"
+                  [filter]="filters()[col.key]"
+                  [values]="valueOptions()[col.key]"
+                  [sortDirection]="sortKey() === col.key ? sortDirection() : null"
+                  [frozenSide]="frozen()[col.key] ?? null"
+                  [canChoose]="cfg().userColumnChoice"
+                  (textChange)="setTextFilter(col.key, $event)"
+                  (valuesChange)="setValueFilter(col.key, $event)"
+                  (sort)="sortBy(col.key, $event)"
+                  (freeze)="setFrozen(col.key, $event)"
+                  (chooseColumns)="chooseColumns()"
+                  (resetColumns)="resetColumns()"
+                ></app-column-menu>
+              </span>
+              @if (cfg().userColumnWidth) {
+                <span
+                  class="resizer"
+                  role="separator"
+                  aria-orientation="vertical"
+                  [attr.aria-label]="'Juster bredden på ' + col.label"
+                  title="Træk for at justere bredden. Dobbeltklik for at nulstille"
+                  (pointerdown)="startResize($event, col)"
+                  (click)="$event.stopPropagation()"
+                  (dblclick)="resetWidth(col, $event)"
+                ></span>
+              }
+            </th>
+          }
+          @if (pageMode()) {
+            <th class="col-actions col-disclosure"><span class="visually-hidden">Vis detaljer</span></th>
+          } @else {
+            <th class="col-actions" data-col="__actions"><span class="visually-hidden">Handlinger</span></th>
+          }
+        </tr>
+      </thead>
+      <tbody (pointerdown)="cellPointerDown($event)" (keydown)="cellKeydown($event)">
+        @if (topSpacer() > 0) {
+          <tr class="spacer" aria-hidden="true" [style.height.px]="topSpacer()"></tr>
+        }
+        @for (p of displayRows(); track p.id; let ri = $index) {
+          <tr
+            [attr.data-index]="rowOffset() + ri"
+            [class.alt]="(rowOffset() + ri) % 2 === 1"
+            [class.selected]="isSelected(p)"
+            [class.clickable]="detailMode() !== 'none'"
+            [class.active-row]="detailId() === p.id"
+            [attr.tabindex]="detailMode() !== 'none' && cfg().highlight === 'row' ? 0 : null"
+            (click)="openDetail(p, $event)"
+            (keydown.enter)="openDetail(p, $event)"
+          >
+            <td class="col-select">
+              <kirby-checkbox
+[size]="cfg().checkboxSize"
+                [checked]="isSelected(p)"
+                (checkedChange)="toggleRow(p, $event)"
+                [attr.aria-label]="'Vælg betaling til ' + p.recipient"
+              ></kirby-checkbox>
+            </td>
+            @for (col of columns(); track col.key; let ci = $index) {
+              <td
+                [attr.data-r]="rowOffset() + ri"
+                [attr.data-c]="ci"
+                [attr.data-sel]="cellEdges(rowOffset() + ri, ci)"
+                [attr.tabindex]="detailMode() !== 'none' && cfg().highlight === 'cell' ? 0 : null"
+                [class.fz-l]="frozenInfo()[col.key]?.side === 'left'"
+                [class.fz-r]="frozenInfo()[col.key]?.side === 'right'"
+                [class.fz-edge]="frozenInfo()[col.key]?.edge"
+                [style.left.px]="frozenInfo()[col.key]?.side === 'left' ? frozenInfo()[col.key]?.offset : null"
+                [style.right.px]="frozenInfo()[col.key]?.side === 'right' ? frozenInfo()[col.key]?.offset : null"
+                [class.sized]="widthOf(col) !== null"
+                [style.--w.px]="widthOf(col)"
+                [class.text-align-right]="col.align === 'right'"
+                [class.col-nowrap]="col.key === 'amount' || col.key === 'currency' || col.key === 'date' || col.key === 'status' || col.key === 'recipientCheck'"
+                [attr.data-col]="col.key"
+              >
+                @switch (col.key) {
+                  @case ('date') {
+                    {{ formatDate(p.date) }}
+                  }
+                  @case ('amount') {
+                    {{ formatAmount(p.amount) }}
+                  }
+                  @case ('currency') {
+                    <app-currency [code]="p.currency" [showFlag]="cfg().currencyStyle === 'flag'" [flagSize]="avatarSize()"></app-currency>
+                  }
+                  @case ('status') {
+                    <ng-container *ngTemplateOutlet="statusTpl; context: { $implicit: p }"></ng-container>
+                  }
+                  @case ('recipientCheck') {
+                    <ng-container *ngTemplateOutlet="checkTpl; context: { $implicit: p }"></ng-container>
+                  }
+                  @default {
+                    <span class="cell-text" [attr.title]="plainValue(p, col.key)">
+                      {{ plainValue(p, col.key) }}
+                    </span>
+                  }
+                }
+              </td>
+            }
+            <td class="col-actions" [class.col-disclosure]="pageMode()">
+              @if (pageMode()) {
+                <kirby-icon name="arrow-more" aria-hidden="true"></kirby-icon>
+              } @else {
+                <ng-container *ngTemplateOutlet="actionsTpl; context: { $implicit: p }"></ng-container>
+              }
+            </td>
+          </tr>
+        }
+        @if (bottomSpacer() > 0) {
+          <tr class="spacer" aria-hidden="true" [style.height.px]="bottomSpacer()"></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+@if (loading() === 'paging') {
+  <nav class="table-footer" aria-label="Sider">
+    <span class="kirby-text-small muted">Viser {{ shownFrom() }}–{{ shownTo() }} af {{ rows().length }}</span>
+    <div class="pager">
+      <button kirby-button size="sm" attentionLevel="3" aria-label="Forrige side" [disabled]="page() === 0" (click)="page.set(page() - 1)">
+        <kirby-icon name="arrow-back"></kirby-icon>
+      </button>
+      <span class="kirby-text-small">Side {{ page() + 1 }} af {{ pageCount() }}</span>
+      <button kirby-button size="sm" attentionLevel="3" aria-label="Næste side" [disabled]="page() >= pageCount() - 1" (click)="page.set(page() + 1)">
+        <kirby-icon name="arrow-more"></kirby-icon>
+      </button>
+    </div>
+  </nav>
+}
+@if (loading() === 'lazy') {
+  <div class="table-footer lazy-more">
+    @if (loadingMore()) {
+      <kirby-spinner size="sm"></kirby-spinner>
+      <span class="kirby-text-small muted">Henter flere betalinger …</span>
+    } @else {
+      <span class="kirby-text-small muted">Viser {{ displayRows().length }} af {{ rows().length }} betalinger</span>
+    }
+  </div>
+}
+</ng-template>
+
+<ng-template #stageTpl>
+  <div class="stage" [class.has-inline]="inlineOpen()" [class.has-side]="sideOpen()">
+    <div class="main">
+      <div class="toolbar" role="toolbar" aria-label="Hurtigfiltre og søgning">
+        <kirby-segmented-control
+          class="quick"
+          mode="chip"
+          aria-label="Hurtigfiltre"
+          [items]="quickItems"
+          [selectedIndex]="quickIndex()"
+          (selectedIndexChange)="setQuick($event)"
+        ></kirby-segmented-control>
+        <kirby-form-field class="search">
+          <input
+            kirby-input
+            type="search"
+            size="md"
+            placeholder="Søg"
+            aria-label="Søg i alle kolonner"
+            [value]="search()"
+            (input)="search.set($any($event.target).value)"
+          />
+          <kirby-icon kirby-affix="prefix" name="search"></kirby-icon>
+        </kirby-form-field>
+        <app-user-view-menu #userMenu (chooseColumns)="chooseColumns()" [class.hidden]="!userMenu.any()"></app-user-view-menu>
+      </div>
+      <ng-container *ngTemplateOutlet="listTpl"></ng-container>
+    </div>
+
+    @if (inlineOpen()) {
+      <aside
+        class="inline-panel"
+        animate.enter="inline-in"
+        animate.leave="inline-out"
+        aria-label="Detaljer om betaling"
+      >
+        @if (bulkOpen()) {
+          <app-bulk-summary
+            [payments]="selectedPayments()"
+            (closed)="toggleAll(false)"
+            (approve)="approveIds($event)"
+          ></app-bulk-summary>
+        } @else {
+          <app-payment-detail
+            [paymentId]="detailId() ?? undefined"
+            presentation="panel"
+            [variant]="cfg().container"
+            (closed)="closeDetail()"
+          ></app-payment-detail>
+        }
+      </aside>
+    }
+
+    @if (sideOpen()) {
+      @if (detailMode() === 'side-modal') {
+        <div class="overlay" appToBody [class.is-card]="cfg().container === 'card'" [class.is-stroked]="cfg().container === 'stroked-card'">
+          <div class="scrim" animate.enter="fade-in" animate.leave="fade-out" (click)="closeDetail()"></div>
+          <aside
+            class="side-panel"
+            animate.enter="slide-in"
+            animate.leave="slide-out"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Detaljer om betaling"
+          >
+            <app-payment-detail
+              [paymentId]="detailId() ?? undefined"
+              presentation="panel"
+              [variant]="cfg().container"
+              (closed)="closeDetail()"
+            ></app-payment-detail>
+          </aside>
+        </div>
+      } @else {
+        <div class="overlay nonmodal" appToBody [class.is-card]="cfg().container === 'card'" [class.is-stroked]="cfg().container === 'stroked-card'">
+          <aside
+            class="side-panel"
+            animate.enter="slide-in"
+            animate.leave="slide-out"
+            role="complementary"
+            aria-label="Detaljer om betaling"
+          >
+            <app-payment-detail
+              [paymentId]="detailId() ?? undefined"
+              presentation="panel"
+              [variant]="cfg().container"
+              (closed)="closeDetail()"
+            ></app-payment-detail>
+          </aside>
+        </div>
+      }
+    }
+  </div>
+</ng-template>
+
+<ng-template #pageTpl>
+  <app-payment-detail
+    [paymentId]="pageDetailId() ?? undefined"
+    presentation="page"
+    [variant]="cfg().container"
+    (closed)="closeDetail()"
+  ></app-payment-detail>
+</ng-template>
+
+@if (pageOpen()) {
+  @if (cfg().container === 'canvas') {
+    <div class="detail-page"><ng-container *ngTemplateOutlet="pageTpl"></ng-container></div>
+  } @else {
+    <kirby-card class="detail-page" [variant]="cfg().container === 'stroked-card' ? 'outlined' : 'elevated'">
+      <div class="detail-body"><ng-container *ngTemplateOutlet="pageTpl"></ng-container></div>
+    </kirby-card>
+  }
+} @else if (cfg().container !== 'canvas') {
+  <kirby-card class="table-card" [variant]="cfg().container === 'stroked-card' ? 'outlined' : 'elevated'">
+    <ng-container *ngTemplateOutlet="stageTpl"></ng-container>
+  </kirby-card>
+} @else {
+  <ng-container *ngTemplateOutlet="stageTpl"></ng-container>
+}

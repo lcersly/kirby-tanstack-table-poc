@@ -1,31 +1,25 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 
+import { DataGrid } from './data-grid/data-grid';
+
 @Component({
   selector: 'app-table-playground',
+  imports: [DataGrid],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="table-playground">
-      <h1>Table Playground</h1>
+      <h1 class="visually-hidden">Table Playground</h1>
+      <app-data-grid />
     </main>
   `,
   styles: `
-    :host {
-      display: block;
-    }
-
-    .table-playground {
-      width: min(100%, 1500px);
-      margin: 0 auto;
-      padding: 2.5rem clamp(1.25rem, 3vw, 3rem);
-    }
-
-    h1 {
-      margin: 0;
-      color: #152b3c;
-      font-size: clamp(2rem, 2.7vw, 2.6rem);
-      font-weight: 600;
-      letter-spacing: -0.035em;
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
     }
   `,
-  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TablePlayground {}

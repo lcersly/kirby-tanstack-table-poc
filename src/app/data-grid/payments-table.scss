@@ -1,0 +1,779 @@
+:host {
+  display: block;
+  width: 100%;
+  // Skillelinjer følger underlaget: canvas (light) og hævet kort (white)
+  --divider-color: var(--kirby-semi-light);
+  --highlight-color: var(--kirby-info, #2f6fed);
+  --kirby-card-border: 1px solid var(--divider-color);
+}
+
+:host(.on-card) {
+  --divider-color: var(--kirby-light);
+}
+
+.muted {
+  color: var(--kirby-text-color-semi-dark);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.status-detail {
+  font-size: var(--kirby-font-size-xs);
+  color: var(--kirby-text-color-semi-dark);
+}
+
+.table-scroll {
+  --row-bg: var(--kirby-white);
+  --cell-padding-y: var(--kirby-spacing-xxs);
+  --pin-select-width: 56px;
+  overflow-x: auto;
+  border: 1px solid var(--divider-color);
+  border-radius: var(--kirby-border-radius);
+
+  // Uden sidelæns scroll er tabellen ikke en scroll-container, så siden scroller og overskriften kan hæfte sig
+  &.fit {
+    overflow: visible;
+
+    table {
+      width: 100%;
+    }
+  }
+
+  &[data-density='compact'] {
+    --cell-padding-y: 4px;
+    --row-height: 32px;
+    --header-height: 24px;
+  }
+  &[data-density='standard'] {
+    --row-height: 44px;
+    --header-height: 32px;
+  }
+  &[data-density='spacious'] {
+    --cell-padding-y: var(--kirby-spacing-xs);
+    --row-height: 64px;
+    --header-height: 40px;
+  }
+
+  table {
+    min-width: 100%;
+    width: max-content;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  // Kirby-tabellen bruger border på tr; med sticky celler flyttes linjerne til cellerne
+  tr {
+    border-bottom: none !important;
+    background-color: var(--row-bg);
+  }
+  td,
+  th {
+    box-shadow: var(--sh-div, 0 0 0 0 transparent);
+    border-bottom: 1px solid var(--divider-color);
+    background-color: var(--row-bg);
+  }
+  td {
+    height: var(--row-height);
+    padding-top: var(--cell-padding-y);
+    padding-bottom: var(--cell-padding-y);
+  }
+  th {
+    --row-bg: var(--kirby-white);
+    height: var(--header-height);
+    padding-top: 0;
+    padding-bottom: 0;
+    vertical-align: middle;
+  }
+
+  &.zebra tbody tr.alt {
+    --row-bg: var(--kirby-background-color);
+  }
+  tbody tr.selected {
+    --row-bg: var(--kirby-semi-light);
+  }
+
+  &.sticky-header thead th {
+    position: sticky;
+    top: var(--sticky-top, 0);
+    z-index: 2;
+  }
+
+  .col-select {
+    width: var(--pin-select-width);
+    min-width: var(--pin-select-width);
+    max-width: var(--pin-select-width);
+    padding-left: var(--kirby-spacing-s);
+    padding-right: 0;
+  }
+
+  &.pin-left {
+    .col-select {
+      position: sticky;
+      z-index: 1;
+      left: 0;
+    }
+    thead .col-select {
+      z-index: 3;
+    }
+  }
+
+  .fz-l,
+  .fz-r {
+    position: sticky;
+    z-index: 1;
+  }
+  thead .fz-l,
+  thead .fz-r {
+    z-index: 3;
+  }
+  .fz-l.fz-edge {
+    --sh-div: 1px 0 0 var(--divider-color);
+  }
+  .fz-r.fz-edge {
+    --sh-div: -1px 0 0 var(--divider-color);
+  }
+
+  th .th-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kirby-spacing-xxs);
+  }
+  th.align-right .th-inner {
+    justify-content: flex-end;
+  }
+  .th-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kirby-spacing-xxs);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: var(--kirby-font-weight-bold);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .th-sort:focus-visible {
+    outline: 2px solid var(--kirby-primary);
+  }
+  .sort-icon {
+    --kirby-icon-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  &.pin-right .col-actions {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+  }
+  &.pin-right:not(:has(.fz-r)) .col-actions {
+    --sh-div: -1px 0 0 var(--divider-color);
+  }
+  &.pin-right thead .col-actions {
+    z-index: 3;
+  }
+
+  .col-actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .col-nowrap {
+    white-space: nowrap;
+  }
+
+  // Når kolonnerne skal tilpasse sig pladsen, afkortes tekst tidligere, så tabellen ikke kan rulle sidelæns
+  &.fit.truncate td:not(.col-nowrap):not(.col-actions):not(.col-select) .cell-text {
+    max-width: 160px;
+  }
+
+  &.truncate td:not(.col-nowrap):not(.col-actions):not(.col-select) .cell-text {
+    display: block;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &.wrap td:not(.col-nowrap):not(.col-actions):not(.col-select) {
+    min-width: 140px;
+    max-width: 240px;
+    overflow-wrap: anywhere;
+  }
+  &.wrap td {
+    height: auto;
+    min-height: var(--row-height);
+    padding-top: var(--kirby-spacing-xs);
+    padding-bottom: var(--kirby-spacing-xs);
+  }
+  &.wrap[data-density='compact'] td {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  td {
+    position: relative;
+  }
+
+  tbody tr:focus,
+  tbody td:focus {
+    outline: none;
+  }
+
+  // Blå fokusmarkering ved tastaturnavigation (række eller celle) og ved markering af celler
+  &:not(.hl-cell) tbody tr:focus-visible td::after,
+  &.hl-cell tbody td:focus-visible::after,
+  &.hl-cell tbody td[data-sel]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 4;
+    border: 0 solid var(--highlight-color);
+  }
+  &:not(.hl-cell) tbody tr:focus-visible td::after {
+    border-width: 2px 0;
+  }
+  &:not(.hl-cell) tbody tr:focus-visible td:first-child::after {
+    border-left-width: 2px;
+  }
+  &:not(.hl-cell) tbody tr:focus-visible td:last-child::after {
+    border-right-width: 2px;
+  }
+  &.hl-cell tbody td:focus-visible::after {
+    border-width: 2px;
+  }
+  &.hl-cell tbody td[data-sel]::after {
+    background-color: color-mix(in srgb, var(--highlight-color) 12%, transparent);
+  }
+  &.hl-cell tbody td[data-sel~='t']::after {
+    border-top-width: 2px;
+  }
+  &.hl-cell tbody td[data-sel~='b']::after {
+    border-bottom-width: 2px;
+  }
+  &.hl-cell tbody td[data-sel~='l']::after {
+    border-left-width: 2px;
+  }
+  &.hl-cell tbody td[data-sel~='r']::after {
+    border-right-width: 2px;
+  }
+  &.hl-cell tbody {
+    user-select: none;
+  }
+
+  // Blød skygge på det indhold, der kan rulle ind under sticky header og fastlåste kolonner.
+  // Skyggen er en gradient pr. celle uden afrunding, så den løber sammenhængende langs hele linjen
+  &.is-stuck thead th::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 14px;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgb(0 0 0 / 12%), rgb(0 0 0 / 4%) 45%, transparent);
+  }
+  &.sh-left.pin-left .fz-l.fz-edge::before,
+  &.sh-right.pin-right .fz-r.fz-edge::before,
+  &.sh-right.pin-right:not(:has(.fz-r)) .col-actions::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: -1px;
+    width: 14px;
+    pointer-events: none;
+  }
+  &.sh-left.pin-left .fz-l.fz-edge::before {
+    left: 100%;
+    background: linear-gradient(to right, rgb(0 0 0 / 12%), rgb(0 0 0 / 4%) 45%, transparent);
+  }
+  &.sh-right.pin-right .fz-r.fz-edge::before,
+  &.sh-right.pin-right:not(:has(.fz-r)) .col-actions::before {
+    right: 100%;
+    background: linear-gradient(to left, rgb(0 0 0 / 12%), rgb(0 0 0 / 4%) 45%, transparent);
+  }
+
+  &.col-dividers {
+    th:not(.col-actions):not(:last-child):not(:nth-last-child(2)),
+    td:not(.col-select):not(.col-actions):not(:last-child):not(:nth-last-child(2)) {
+      border-right: 1px solid var(--divider-color);
+    }
+    .fz-edge {
+      --sh-div: 0 0 0 0 transparent;
+    }
+  }
+
+  &:not(.col-dividers) {
+    .fz-edge,
+    .col-actions {
+      --sh-div: 0 0 0 0 transparent;
+    }
+  }
+
+  th.align-right {
+    text-align: right;
+  }
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--kirby-spacing-xxs);
+
+  // Kirby-knapper har lodret margin, som ellers gør rækken højere end sin række-højde
+  button[kirby-button] {
+    margin: 0;
+  }
+
+  // Menuens indre div er inline-block og giver ekstra linjehøjde, som gør rækken højere end sin række-højde
+  kirby-menu {
+    display: flex;
+
+    ::ng-deep > div {
+      display: flex;
+
+      > button {
+        margin: 0;
+      }
+    }
+  }
+}
+
+.check-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kirby-spacing-xxs);
+  white-space: nowrap;
+
+  kirby-icon {
+    flex-shrink: 0;
+  }
+}
+
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kirby-spacing-s);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kirby-spacing-xs);
+  padding: var(--kirby-spacing-s);
+  border: 1px solid var(--divider-color);
+  border-radius: var(--kirby-border-radius);
+  background-color: var(--kirby-white);
+
+  &.selected {
+    background-color: var(--kirby-semi-light);
+    border-color: var(--kirby-primary);
+  }
+}
+
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kirby-spacing-s);
+}
+
+.card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-amount {
+  white-space: nowrap;
+}
+
+.card-flags,
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kirby-spacing-xs);
+  align-items: center;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+tr.active-row,
+.card.active-row {
+  --row-bg: var(--kirby-semi-light);
+  background-color: var(--kirby-semi-light);
+}
+
+.col-disclosure kirby-icon,
+.card-chevron {
+  // Samme størrelse som pilen på items i konfigurationen
+  --kirby-icon-size: 16px;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
+.col-disclosure {
+  width: 56px;
+  min-width: 56px;
+  text-align: right;
+}
+
+.card-chevron {
+  align-self: flex-end;
+}
+
+.table-card {
+  display: block;
+  padding: 0;
+  overflow: clip;
+
+  .table-scroll {
+    border: none;
+  }
+}
+
+.stage {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+
+  &.has-inline .table-scroll {
+    border-right: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .main {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+// Paneler har fuld højde: inline-panelet strækker sig over hele tabellens højde, og indholdet
+// hæfter sig i toppen, så det følger med, når siden scrolles
+.inline-panel > app-payment-detail {
+  position: sticky;
+  top: var(--sticky-top, 0);
+  max-height: calc(100vh - var(--sticky-top, 0px));
+  overflow-y: auto;
+}
+
+.side-panel {
+  overflow-y: auto;
+  height: calc(100vh - var(--sticky-top, 0px));
+}
+
+// Panelet følger tabellens ramme: inline-panelet ligger i samme kort/canvas som tabellen,
+// og sidepanelet ligger ovenpå og skal derfor have sin egen baggrund
+.side-panel {
+  background-color: var(--kirby-background-color);
+  border-radius: var(--kirby-border-radius);
+}
+
+:host(.on-card) .side-panel {
+  background-color: var(--kirby-white);
+}
+
+:host(.on-stroked) .side-panel {
+  border: 1px solid var(--divider-color);
+}
+
+.inline-panel {
+  will-change: transform, opacity;
+  flex: 0 0 400px;
+  align-self: stretch;
+  max-width: 100%;
+  border-left: 1px solid var(--divider-color);
+}
+
+.side-panel {
+  position: sticky;
+  top: var(--sticky-top, 0);
+  margin-left: auto;
+  width: min(420px, 100%);
+  pointer-events: auto;
+  box-shadow: -4px 0 16px rgb(0 0 0 / 20%);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  --divider-color: var(--kirby-semi-light);
+  pointer-events: none;
+
+  &.is-card {
+    --divider-color: var(--kirby-light);
+  }
+
+  .scrim {
+    pointer-events: auto;
+  }
+
+  .side-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    height: auto;
+    margin: 0;
+    border-radius: 0;
+    background-color: var(--kirby-background-color);
+  }
+
+  &.is-card .side-panel {
+    background-color: var(--kirby-white);
+  }
+
+  &.is-stroked .side-panel {
+    border-left: 1px solid var(--divider-color);
+  }
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background-color: rgb(0 0 0 / 40%);
+}
+
+.detail-page {
+  display: block;
+  max-width: 720px;
+}
+
+.detail-body {
+  padding: var(--kirby-spacing-m);
+}
+
+// Transitioner: paneler glider ind fra højre
+.slide-in {
+  animation: slide-in 250ms ease-out;
+}
+.slide-out {
+  animation: slide-in 200ms ease-in reverse forwards;
+}
+.fade-in {
+  animation: fade 250ms ease-out;
+}
+.fade-out {
+  animation: fade 200ms ease-in reverse forwards;
+}
+.inline-in {
+  animation: inline-in 250ms ease-out;
+}
+.inline-out {
+  animation: inline-in 200ms ease-in reverse forwards;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes inline-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-in,
+  .slide-out,
+  .fade-in,
+  .fade-out,
+  .inline-in,
+  .inline-out {
+    animation-duration: 1ms;
+  }
+}
+
+@media (max-width: 767px) {
+  .inline-panel {
+    flex-basis: 100%;
+  }
+  .stage.has-inline {
+    flex-direction: column;
+  }
+}
+
+// Knapper med attention level 3 følger rækkens baggrund:
+// grå på hvid baggrund, hvid på grå baggrund (canvas eller markeret/aktiv række)
+.table-scroll,
+.cards {
+  --btn3-bg: var(--kirby-dark-overlay);
+
+  ::ng-deep button.attention-level3 {
+    --kirby-button-background-color: var(--btn3-bg);
+  }
+}
+
+:host(.on-canvas) .table-scroll.zebra tbody tr.alt:not(.selected):not(.active-row) {
+  --row-bg: var(--kirby-white);
+  --btn3-bg: var(--kirby-dark-overlay);
+}
+
+:host(.on-card) .table-scroll.zebra tbody tr.alt:not(.selected):not(.active-row) {
+  --btn3-bg: var(--kirby-white);
+}
+
+// På canvas er der ingen ramme, så en vandret linje øverst afgrænser tabellen og inline-panelet samlet
+:host(.on-plain) .stage {
+  border-top: 1px solid var(--divider-color);
+}
+
+:host(.on-canvas) .table-scroll {
+  --btn3-bg: var(--kirby-white);
+}
+
+:host(.on-canvas) {
+  .table-scroll,
+  .table-scroll th {
+    --row-bg: var(--kirby-background-color);
+  }
+  .table-scroll {
+    border: none;
+  }
+  .card {
+    border: none;
+  }
+}
+
+// Hover, markeret og aktiv række skifter baggrund og dermed knappernes tema
+:host(.on-canvas) .table-scroll:not(.hl-cell) tbody tr.clickable:hover {
+  --row-bg: var(--kirby-white);
+  --btn3-bg: var(--kirby-dark-overlay);
+}
+
+:host(.on-card) .table-scroll:not(.hl-cell) tbody tr.clickable:hover {
+  --row-bg: var(--kirby-background-color);
+  --btn3-bg: var(--kirby-white);
+}
+
+:host(.on-canvas) .table-scroll.hl-cell tbody tr.clickable td:not(.col-select):not(.col-actions):hover {
+  background-color: var(--kirby-white);
+}
+
+:host(.on-card) .table-scroll.hl-cell tbody tr.clickable td:not(.col-select):not(.col-actions):hover {
+  background-color: var(--kirby-background-color);
+}
+
+.table-scroll tbody tr.selected,
+.table-scroll tbody tr.active-row,
+:host(.on-canvas) .table-scroll tbody tr.selected,
+:host(.on-canvas) .table-scroll tbody tr.active-row {
+  --row-bg: var(--kirby-semi-light);
+  --btn3-bg: var(--kirby-white);
+}
+
+.card.selected,
+.card.active-row {
+  --btn3-bg: var(--kirby-white);
+}
+
+.spacer td,
+tr.spacer {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kirby-spacing-s);
+  padding: var(--kirby-spacing-xs) var(--kirby-spacing-m);
+  min-height: 48px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--divider-color);
+
+  &.lazy-more {
+    justify-content: center;
+  }
+
+  .pager {
+    display: flex;
+    align-items: center;
+    gap: var(--kirby-spacing-xs);
+  }
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kirby-spacing-s);
+  padding: var(--kirby-spacing-xs) var(--kirby-spacing-s);
+  border-bottom: 1px solid var(--divider-color);
+
+  .quick {
+    flex: 0 0 auto;
+  }
+  .search {
+    flex: 1;
+    min-width: 200px;
+    max-width: 320px;
+    margin-left: auto;
+    margin-bottom: 0;
+  }
+  .hidden {
+    display: none;
+  }
+}
+
+.table-scroll {
+  th {
+    position: relative;
+  }
+  .resizer {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    bottom: 0;
+    width: 7px;
+    cursor: col-resize;
+    z-index: 4;
+    touch-action: none;
+  }
+  .resizer:hover {
+    background: linear-gradient(to right, transparent 2px, var(--kirby-primary) 2px, var(--kirby-primary) 4px, transparent 4px);
+  }
+  &.truncate td.sized .cell-text,
+  &.fit.truncate td.sized .cell-text {
+    max-width: calc(var(--w) - 32px);
+  }
+}
