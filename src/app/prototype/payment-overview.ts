@@ -9,12 +9,10 @@ import {
   signal,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import {
-  ButtonComponent,
-  InputComponent,
-} from '@kirbydesign/designsystem';
+import { ButtonComponent } from '@kirbydesign/designsystem/button';
+import { InputComponent } from '@kirbydesign/designsystem/form-field';
 
-import { DEMO_COMMIT } from './demo-commit.generated';
+import { DEMO_COMMIT, KIRBY_VERSION } from './demo-commit.generated';
 import { createSyntheticPayments } from './payment-data';
 import { PaymentTablePrototype } from './payment-table';
 
@@ -60,6 +58,7 @@ export class PaymentOverviewPrototype {
   );
   protected readonly showVariantSwitcher = isDevMode();
   protected readonly demoCommit = DEMO_COMMIT;
+  protected readonly kirbyVersion = KIRBY_VERSION;
   protected readonly requestedCount = signal('1000');
   protected readonly countError = signal<string | null>(null);
   protected readonly payments = signal(createSyntheticPayments(1_000));
