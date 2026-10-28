@@ -81,18 +81,7 @@ jobs:
         id: current
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          current_main=$(curl --fail --silent --show-error \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/lcersly/kirby-tanstack-table-poc/commits/main \
-            | node -e 'let input="";process.stdin.on("data",chunk=>input+=chunk).on("end",()=>process.stdout.write(JSON.parse(input).sha))')
-          if [ "$current_main" != "$GITHUB_SHA" ]; then
-            echo "is_current=false" >> "$GITHUB_OUTPUT"
-            echo "Rejecting deployment of a superseded main revision."
-          else
-            echo "is_current=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/check-current-main.mjs
 
       - name: Deploy to Firebase Hosting
         id: deploy
