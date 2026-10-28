@@ -26,7 +26,10 @@ The page shows the Kirby version read from the installed
 `@kirbydesign/designsystem` package and the short revision of the source commit.
 Main-branch CI uploads the production browser output as
 `payment-demo-<commit-sha>`. Its `artifact-provenance.json` records the source
-commit and successful workflow run. CI does not deploy the artifact.
+commit, successful workflow run, and installed Kirby version. CI does not
+deploy the artifact automatically. The manual Firebase release path and
+rollback procedure are documented in
+[docs/firebase-hosting.md](docs/firebase-hosting.md).
 
 ## Checks and dependency upgrades
 

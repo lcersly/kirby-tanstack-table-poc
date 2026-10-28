@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
 import { URL, fileURLToPath } from 'node:url';
@@ -40,6 +40,8 @@ if (checkedOutCommit !== sourceCommit) {
   );
 }
 
+const kirbyPackagePath = resolve(repoRoot, 'node_modules/@kirbydesign/designsystem/package.json');
+const kirbyPackage = JSON.parse(readFileSync(kirbyPackagePath, 'utf8'));
 const browserOutput = resolve(repoRoot, 'dist/kirby-payment-overview-prototype/browser');
 const shortCommit = execFileSync('git', ['rev-parse', '--short', sourceCommit], {
   cwd: repoRoot,
@@ -55,9 +57,19 @@ const provenance = {
   runUrl: `${serverUrl}/${repository}/actions/runs/${runId}`,
   sourceCommit,
   shortCommit,
+  kirbyVersion: kirbyPackage.version,
+};
+const publicIdentity = {
+  sourceCommit,
+  shortCommit,
+  kirbyVersion: kirbyPackage.version,
 };
 
 writeFileSync(
-  resolve(browserOutput, 'artifact-provenance.json'),
+  resolve(browserOutput, 'demo-version.json'),
+  `${JSON.stringify(publicIdentity, null, 2)}\n`,
+);
+writeFileSync(
+  resolve(repoRoot, 'dist/kirby-payment-overview-prototype/artifact-provenance.json'),
   `${JSON.stringify(provenance, null, 2)}\n`,
 );

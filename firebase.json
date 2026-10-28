@@ -1,0 +1,32 @@
+{
+  "hosting": {
+    "public": "dist/kirby-payment-overview-prototype/browser",
+    "ignore": ["**/.*", "**/node_modules/**", "**/*.map", "**/artifact-provenance.json"],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/demo-version.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ]
+  }
+}
