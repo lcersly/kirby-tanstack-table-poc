@@ -2,3 +2,64 @@
   display: block;
   min-height: 100vh;
 }
+
+.skip-link {
+  position: absolute;
+  top: 0.5rem;
+  left: 1.25rem;
+  z-index: 100;
+  padding: 0.75rem 1rem;
+  border: 0;
+  background: #fff;
+  color: #172a3a;
+  transform: translateY(-200%);
+
+  &:focus {
+    transform: translateY(0);
+  }
+}
+
+.playspace-header {
+  border-bottom: 1px solid #dce3e8;
+  background: #fff;
+}
+
+.playspace-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  width: min(100%, 1500px);
+  margin: 0 auto;
+  padding: 0.75rem clamp(1.25rem, 3vw, 3rem);
+}
+
+.playspace-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: 0.35rem;
+  color: #294453;
+  font-weight: 700;
+  text-decoration: none;
+
+  &:hover {
+    background: #f1f7f9;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #155950;
+    outline-offset: 3px;
+  }
+}
+
+.playspace-link-active {
+  background: #e8f4f2;
+  color: #155950;
+  text-decoration: underline;
+  text-underline-offset: 0.3rem;
+}
+
+.playspace-content {
+  outline: none;
+}

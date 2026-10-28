@@ -8,8 +8,8 @@ import { PaymentOverviewPrototype } from './payment-overview';
 vi.mock('@kirbydesign/designsystem/button', async () => {
   const { Directive } = await import('@angular/core');
 
-  @Directive({ selector: 'button[kirby-button]' })
   class MockButtonComponent {}
+  Directive({ selector: 'button[kirby-button]' })(MockButtonComponent);
 
   return { ButtonComponent: MockButtonComponent };
 });
@@ -17,8 +17,8 @@ vi.mock('@kirbydesign/designsystem/button', async () => {
 vi.mock('@kirbydesign/designsystem/form-field', async () => {
   const { Directive } = await import('@angular/core');
 
-  @Directive({ selector: 'input[kirby-input]' })
   class MockInputComponent {}
+  Directive({ selector: 'input[kirby-input]' })(MockInputComponent);
 
   return { InputComponent: MockInputComponent };
 });

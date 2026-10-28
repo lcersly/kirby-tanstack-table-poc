@@ -1,1 +1,25 @@
-<router-outlet />
+<button class="skip-link" type="button" (click)="playspaceContent.focus()">Skip to content</button>
+<header class="playspace-header">
+  <nav class="playspace-nav" aria-label="Playspaces">
+    <a
+      class="playspace-link"
+      routerLink="/prototype/payment-overview"
+      routerLinkActive="playspace-link-active"
+      ariaCurrentWhenActive="page"
+    >
+      POC
+    </a>
+    <a
+      class="playspace-link"
+      routerLink="/prototype/table-playground"
+      routerLinkActive="playspace-link-active"
+      ariaCurrentWhenActive="page"
+    >
+      Table Playground
+    </a>
+  </nav>
+</header>
+
+<div #playspaceContent id="playspace-content" class="playspace-content" tabindex="-1">
+  <router-outlet (activate)="playspaceContent.focus()" />
+</div>

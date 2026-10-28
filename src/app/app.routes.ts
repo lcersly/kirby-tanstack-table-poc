@@ -8,10 +8,14 @@ export const routes: Routes = [
   },
   {
     path: 'prototype/payment-overview',
+    title: 'POC',
     loadComponent: () =>
-      import('./prototype/payment-overview').then(
-        (module) => module.PaymentOverviewPrototype,
-      ),
+      import('./prototype/payment-overview').then((module) => module.PaymentOverviewPrototype),
+  },
+  {
+    path: 'prototype/table-playground',
+    title: 'Table Playground',
+    loadComponent: () => import('./table-playground').then((module) => module.TablePlayground),
   },
   {
     path: '**',
