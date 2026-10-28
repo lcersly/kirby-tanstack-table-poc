@@ -18,15 +18,9 @@ import { CHECK_COLORS, CHECK_ICONS, FlagColor, RecipientCheck } from './payments
       </kirby-flag>
     } @else {
       <span class="content">
-        @if (avatarSize === 'xs') {
-          <kirby-avatar size="xs" class="check-avatar" [class]="color()">
-            <kirby-icon [name]="icon()"></kirby-icon>
-          </kirby-avatar>
-        } @else {
-          <span class="avatar xxs" [class]="color()">
-            <kirby-icon [name]="icon()"></kirby-icon>
-          </span>
-        }
+        <kirby-avatar size="xs" class="check-avatar" [class.dense]="avatarSize !== 'xs'" [class]="color()">
+          <kirby-icon [name]="icon()"></kirby-icon>
+        </kirby-avatar>
         {{ check }}
       </span>
     }
@@ -57,40 +51,12 @@ import { CHECK_COLORS, CHECK_ICONS, FlagColor, RecipientCheck } from './payments
         --kirby-avatar-background-color: var(--kirby-danger-tint);
       }
     }
-    .avatar {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background-color: var(--avatar-bg, var(--kirby-semi-light));
-      color: var(--avatar-color, var(--kirby-black));
-
-      kirby-icon {
-        --kirby-icon-font-size: 16px;
-      }
-      &.xxs {
-        width: 16px;
-        height: 16px;
-
-        kirby-icon {
-          --kirby-icon-font-size: 12px;
-        }
-      }
-      &.success {
-        --avatar-bg: var(--kirby-success-tint);
-        --avatar-color: var(--kirby-black);
-      }
-      &.warning {
-        --avatar-bg: var(--kirby-warning-tint);
-        --avatar-color: var(--kirby-black);
-      }
-      &.danger {
-        --avatar-bg: var(--kirby-danger-tint);
-        --avatar-color: var(--kirby-black);
-      }
+    // [OPEN POINT: Kirby har ingen xxs-avatar; i kompakt og standard er avataren lige så høj som et xs-flag (20 px), mens ikonet beholder Luftigs størrelse]
+    .check-avatar.dense ::ng-deep .avatar {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      overflow: visible;
     }
   `,
 })
@@ -105,7 +71,7 @@ export class RecipientCheckComponent {
   }
   @Input() asFlag = true;
   @Input() flagSize: 'xs' | 'sm' = 'xs';
-  @Input() avatarSize: 'xs' | 'xxs' = 'xs';
+  @Input() avatarSize: 'xs' | 'sm' | 'xxs' = 'xs';
 
   readonly color = computed<FlagColor>(() => CHECK_COLORS[this.value()]);
   readonly icon = computed(() => CHECK_ICONS[this.value()]);

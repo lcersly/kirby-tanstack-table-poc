@@ -1,4 +1,5 @@
 import {
+  AfterViewChecked,
   Component,
   ElementRef,
   HostListener,
@@ -14,6 +15,9 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ButtonComponent, ButtonSize } from '@kirbydesign/designsystem/button';
 import { CheckboxComponent } from '@kirbydesign/designsystem/checkbox';
 import { FlagComponent } from '@kirbydesign/designsystem/flag';
+import { DropdownComponent } from '@kirbydesign/designsystem/dropdown';
+import { SaveFilterDialogComponent } from './save-filter-dialog';
+import { BadgeComponent } from '@kirbydesign/designsystem/badge';
 import { IconComponent } from '@kirbydesign/designsystem/icon';
 import { ItemComponent } from '@kirbydesign/designsystem/item';
 import { MenuComponent } from '@kirbydesign/designsystem/menu';
@@ -35,16 +39,16 @@ import {
   nextStatusAfterApproval,
 } from './payments';
 import { BulkSummaryComponent } from './bulk-summary';
-import { SegmentedControlComponent } from '@kirbydesign/designsystem/segmented-control';
+import { SegmentItem, SegmentedControlComponent } from '@kirbydesign/designsystem/segmented-control';
 import { SpinnerComponent } from '@kirbydesign/designsystem/spinner';
 import { AffixDirective, FormFieldComponent, InputComponent } from '@kirbydesign/designsystem/form-field';
 import { UserViewMenuComponent } from './user-view-menu';
 import { ColumnMenuComponent } from './column-menu';
-import { ColumnChooserComponent } from './column-chooser';
+import { SfArrowComponent } from './sf-arrow';
 import { ToBodyDirective } from './to-body';
 import { PaymentDetailComponent } from './payment-detail';
 import { PaymentsService } from './payments.service';
-import { COLUMNS, ColumnDef, ColumnKey, TableConfigService } from './table-config';
+import { COLUMNS, ColumnDef, ColumnKey, TableConfigService, defaultDirection } from './table-config';
 
 const SMALL_SCREEN_MAX = 768;
 const SELECT_WIDTH = 56;
@@ -53,15 +57,71 @@ const MOCK_TODAY = '2026-10-14';
 export const QUICK_FILTERS = [
   { id: 'upcoming', label: 'Kommende', test: (p: Payment) => p.date > MOCK_TODAY },
   { id: 'missing', label: 'Mangler godkendelse', test: (p: Payment) => p.status.startsWith('Mangler') },
-  // [OPEN POINT: Der findes ingen status for "Returneret" endnu, så Afvist og Fejl bruges]
-  { id: 'rejected', label: 'Afviste/returnerede', test: (p: Payment) => p.status === 'Afvist' || p.status === 'Fejl' },
+  { id: 'rejected', label: 'Afviste', test: (p: Payment) => p.status === 'Afvist' },
+  { id: 'error', label: 'Fejl', test: (p: Payment) => p.status === 'Fejl' },
 ] as const;
 // Margen, så kolonnernes faktiske indhold (fx kolonnemenuen) ikke giver sidelæns rulning
 const FIT_MARGIN = 32;
 
+export interface SavedFilter {
+  id: number;
+  name: string;
+  filters: Partial<Record<ColumnKey, ColumnFilter>>;
+  sortKey: ColumnKey;
+  sortDirection: 'asc' | 'desc';
+}
+
+export type NumberOp = 'gt' | 'lt' | 'between' | 'eq' | 'neq';
+
+export interface NumberFilter {
+  op: NumberOp;
+  a: number | null;
+  b: number | null;
+}
+
 export interface ColumnFilter {
   text: string;
   values: string[] | null;
+  num?: NumberFilter | null;
+}
+
+/** Et talfilter gælder først, når alle de tal, det kræver, er udfyldt */
+export function numberFilterActive(n: NumberFilter | null | undefined): n is NumberFilter {
+  return !!n && n.a !== null && (n.op !== 'between' || n.b !== null);
+}
+
+export function numberFilterLabel(n: NumberFilter): string {
+  const f = (v: number | null) => (v ?? 0).toLocaleString('da-DK');
+  switch (n.op) {
+    case 'gt':
+      return `Højere end ${f(n.a)}`;
+    case 'lt':
+      return `Lavere end ${f(n.a)}`;
+    case 'eq':
+      return `Lig med ${f(n.a)}`;
+    case 'neq':
+      return `Forskellig fra ${f(n.a)}`;
+    case 'between':
+      return `Mellem ${f(n.a)} og ${f(n.b)}`;
+  }
+}
+
+function numberMatches(v: number, n: NumberFilter): boolean {
+  const a = n.a as number;
+  switch (n.op) {
+    case 'gt':
+      return v > a;
+    case 'lt':
+      return v < a;
+    case 'eq':
+      return v === a;
+    case 'neq':
+      return v !== a;
+    case 'between': {
+      const b = n.b as number;
+      return v >= Math.min(a, b) && v <= Math.max(a, b);
+    }
+  }
 }
 // Knapperne skifter trin, når tabellen bliver smallere: ikon + tekst, kun tekst, kun ikon, overflow
 const ACTION_STEPS = [
@@ -82,6 +142,7 @@ const ROW_HEIGHTS = { compact: 32, standard: 44, spacious: 64 } as const;
     FormFieldComponent,
     InputComponent,
     ColumnMenuComponent,
+    SfArrowComponent,
     UserViewMenuComponent,
     BulkSummaryComponent,
     SegmentedControlComponent,
@@ -92,6 +153,8 @@ const ROW_HEIGHTS = { compact: 32, standard: 44, spacious: 64 } as const;
     CheckboxComponent,
     FlagComponent,
     IconComponent,
+    BadgeComponent,
+    DropdownComponent,
     ItemComponent,
     MenuComponent,
     CardComponent,
@@ -108,11 +171,12 @@ const ROW_HEIGHTS = { compact: 32, standard: 44, spacious: 64 } as const;
   templateUrl: './payments-table.html',
   styleUrl: './payments-table.scss',
 })
-export class PaymentsTableComponent implements OnInit, OnDestroy {
+export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewChecked {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly configService = inject(TableConfigService);
   readonly cfg = this.configService.effective;
   readonly allColumns = COLUMNS;
+  readonly defaultDirection = defaultDirection;
 
   private readonly service = inject(PaymentsService);
   private readonly modalController = inject(ModalController);
@@ -145,18 +209,21 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
   );
   // Når kolonner skjules ved pladsmangel (eller inline-panelet er åbent), må tabellen aldrig rulle sidelæns
   readonly fitColumns = computed(() => this.cfg().columnOverflow === 'hide' || this.inlineOpen());
-  readonly flagSize = computed(() => 'xs' as const);
+  readonly flagSize = computed(() => (this.cfg().density === 'spacious' ? 'sm' : 'xs') as 'sm' | 'xs');
 
   private effWidth(c: ColumnDef): number {
     return this.widthOf(c) ?? c.width;
   }
 
   readonly columns = computed<ColumnDef[]>(() => {
-    const chosen = COLUMNS.filter((c) => c.noHide || this.cfg().visibleColumns.includes(c.key));
+    const order = this.cfg().visibleColumns;
+    const chosen = COLUMNS.filter((c) => c.noHide || order.includes(c.key)).sort(
+      (a, b) => order.indexOf(a.key) - order.indexOf(b.key),
+    );
     // Inline-panelet skubber tabellen og skjuler de mindst vigtige kolonner
     const hide = this.cfg().columnOverflow === 'hide' || this.inlineOpen();
     if (!hide) return chosen;
-    const fixed = SELECT_WIDTH + this.actionsWidth() + FIT_MARGIN;
+    const fixed = this.selectWidth() + this.actionsWidth() + FIT_MARGIN;
     let available = this.width() - (this.inlineOpen() ? INLINE_PANEL_WIDTH : 0) - fixed;
     const keep = new Set<ColumnKey>();
     for (const c of chosen.filter((c) => c.noHide)) {
@@ -178,22 +245,41 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
 
   readonly actionsDisplay = computed<'full' | 'label' | 'icon' | 'menu'>(() => {
     if (this.cfg().actionsOverflow) return 'menu';
+    const forced = this.cfg().actionsForce;
+    if (forced !== 'auto') return forced;
     const available = this.width() - (this.inlineOpen() ? INLINE_PANEL_WIDTH : 0);
     return ACTION_STEPS.find((s) => available >= s.minTable)?.display ?? 'menu';
   });
 
   private readonly actionsWidth = computed(() => {
     if (this.pageMode()) return DISCLOSURE_WIDTH;
+    if (!this.cfg().featureRowActions) return 0;
     return ACTION_STEPS.find((s) => s.display === this.actionsDisplay())?.width ?? DISCLOSURE_WIDTH;
   });
 
+  readonly selectWidth = computed(() => (this.cfg().featureSelect ? SELECT_WIDTH : 0));
+  /** Kolonnen med rækkehandlinger vises, når der er handlinger, eller når rækken fører til en detaljeside */
+  readonly showActionsColumn = computed(() => this.cfg().featureRowActions || this.pageMode());
+  readonly canFreeze = computed(() => this.cfg().columnOverflow === 'scroll');
+  readonly hasColumnMenu = computed(() => {
+    const c = this.cfg();
+    return c.featureSort || c.featureFilter || this.canFreeze() || c.userColumnWidth || c.userColumnChoice;
+  });
+  readonly showToolbar = computed(() => {
+    const c = this.cfg();
+    return c.featureQuick || c.featureSearch || c.featureSettings || this.activeFilters().length > 0 || this.savedFilters().length > 0;
+  });
+
+  readonly checkboxSize = computed(() => (this.cfg().density === 'spacious' ? 'md' : this.cfg().checkboxSize));
+  readonly checkAvatarSize = computed(() => ({ compact: 'xxs', standard: 'sm', spacious: 'xs' } as const)[this.cfg().density]);
   readonly avatarSize = computed(() => (this.cfg().density === 'compact' ? 'xxs' : 'xs'));
 
   readonly rows = computed(() => {
     const key = this.sortKey();
     const dir = this.sortDirection() === 'asc' ? 1 : -1;
     const filters = this.filters();
-    const quick = QUICK_FILTERS.filter((q) => this.quick().has(q.id));
+    // Hurtigfiltrene er inaktive, mens der filtreres i kolonnerne
+    const quick = this.columnFiltered() ? [] : QUICK_FILTERS.filter((q) => this.quick().has(q.id));
     const term = this.search().trim().toLowerCase();
     return this.payments()
       .filter((p) => this.matches(p, filters))
@@ -226,6 +312,8 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
       const value = this.plainValue(p, col.key);
       if (f.text && !value.toLowerCase().includes(f.text.toLowerCase())) return false;
       if (f.values && !f.values.includes(value)) return false;
+      const raw = p[col.key as keyof Payment];
+      if (numberFilterActive(f.num) && typeof raw === 'number' && !numberMatches(raw, f.num)) return false;
     }
     return true;
   }
@@ -236,6 +324,11 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
     const result = {} as Record<ColumnKey, { value: string; count: number }[]>;
     for (const col of COLUMNS) {
       const counts = new Map<string, number>();
+      // Tal varierer for meget til at kunne vælges enkeltvis
+      if (col.filter === 'number') {
+        result[col.key] = [];
+        continue;
+      }
       for (const p of this.payments()) {
         if (!this.matches(p, filters, col.key)) continue;
         const v = this.plainValue(p, col.key);
@@ -259,7 +352,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
     const w = this.colWidths();
     const cols = this.columns();
     const info: Partial<Record<ColumnKey, { side: 'left' | 'right'; offset: number; edge: boolean }>> = {};
-    let left = SELECT_WIDTH;
+    let left = this.selectWidth();
     const lefts = cols.filter((c) => f[c.key] === 'left');
     lefts.forEach((c, i) => {
       info[c.key] = { side: 'left', offset: left, edge: i === lefts.length - 1 };
@@ -274,14 +367,34 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
     return info;
   });
 
-  readonly quickItems = [{ id: 'all', text: 'Alle' }, ...QUICK_FILTERS.map((q) => ({ id: q.id as string, text: q.label as string }))];
+  // Tal i badges følger kun søgning og kolonnefiltre, ikke de hurtige filtre selv
+  private readonly quickBase = computed(() => {
+    const filters = this.filters();
+    const term = this.search().trim().toLowerCase();
+    return this.payments().filter((p) => this.matches(p, filters) && (!term || COLUMNS.some((c) => this.plainValue(p, c.key).toLowerCase().includes(term))));
+  });
+  readonly quickItems = computed<SegmentItem[]>(() => {
+    const base = this.quickBase();
+    const item = (id: string, text: string, count: number, themeColor: 'medium' | 'warning'): SegmentItem => ({
+      id,
+      text,
+      badge: { content: String(count), themeColor, description: `${count} betalinger` },
+    });
+    return [
+      item('all', 'Alle', base.length, 'medium'),
+      ...QUICK_FILTERS.map((q) =>
+        item(q.id, q.label, base.filter((p) => q.test(p)).length, q.id === 'rejected' || q.id === 'error' ? 'warning' : 'medium'),
+      ),
+    ];
+  });
   readonly quickIndex = computed(() => {
-    const id = [...this.quick()][0];
-    return id ? this.quickItems.findIndex((q) => q.id === id) : 0;
+    const id = this.columnFiltered() ? undefined : [...this.quick()][0];
+    return id ? this.quickItems().findIndex((q) => q.id === id) : 0;
   });
 
   setQuick(index: number) {
-    const id = this.quickItems[index]?.id;
+    this.snapshotRows();
+    const id = this.quickItems()[index]?.id;
     this.quick.set(!id || id === 'all' ? new Set() : new Set([id]));
   }
 
@@ -307,17 +420,179 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
     document.addEventListener('pointerup', up);
   }
 
+  // Måler det bredeste indhold i de indlæste rækker (og overskriften) og sætter bredden efter det
+  private contentWidth(key: ColumnKey): number | null {
+    const root = this.host.nativeElement;
+    const th = root.querySelector<HTMLElement>(`thead th[data-col="${key}"]`);
+    if (!th) return null;
+    const pad = (el: HTMLElement) => {
+      const cs = getComputedStyle(el);
+      return parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    };
+    const inner = th.querySelector<HTMLElement>('.th-inner');
+    let widest = 0;
+    if (inner) {
+      const gap = parseFloat(getComputedStyle(inner).columnGap) || 0;
+      const parts = Array.from(inner.children) as HTMLElement[];
+      widest = parts.reduce((sum, el) => sum + (el.scrollWidth || el.offsetWidth), 0) + gap * (parts.length - 1);
+    }
+    widest += pad(th);
+    root.querySelectorAll<HTMLElement>(`tbody td[data-col="${key}"]`).forEach((td) => {
+      const text = td.querySelector<HTMLElement>('.cell-text');
+      let w: number;
+      if (text) w = text.scrollWidth;
+      else {
+        const range = document.createRange();
+        range.selectNodeContents(td);
+        w = range.getBoundingClientRect().width;
+      }
+      widest = Math.max(widest, Math.ceil(w) + pad(td));
+    });
+    return Math.min(600, Math.ceil(widest));
+  }
+
+  autoFit(col: ColumnDef) {
+    const w = this.contentWidth(col.key);
+    if (w) this.configService.setUserWidth(col.key, w);
+    setTimeout(() => this.updateShadows());
+  }
+
+  autoFitAll() {
+    // Mål først, så ændringer undervejs ikke påvirker målingen
+    const widths = this.columns().map((c) => [c.key, this.contentWidth(c.key)] as const);
+    for (const [key, w] of widths) if (w) this.configService.setUserWidth(key, w);
+    setTimeout(() => this.updateShadows());
+  }
+
   resetWidth(col: ColumnDef, e: Event) {
     e.stopPropagation();
     this.configService.setUserWidth(col.key, null);
   }
 
   setTextFilter(key: ColumnKey, text: string) {
-    this.filters.update((f) => this.withFilter(f, key, { text, values: f[key]?.values ?? null }));
+    this.snapshotRows();
+    this.filters.update((f) => this.withFilter(f, key, { ...f[key], text, values: f[key]?.values ?? null }));
+  }
+
+  setNumberFilter(key: ColumnKey, num: NumberFilter | null) {
+    this.snapshotRows();
+    this.filters.update((f) => this.withFilter(f, key, { text: '', values: null, ...f[key], num }));
+  }
+
+  // Ét valg pr. kolonne: antal valgte filtre og en tekst til chippen
+  readonly activeFilters = computed(() =>
+    COLUMNS.flatMap((col) => {
+      const f = this.filters()[col.key];
+      if (!f) return [];
+      if (numberFilterActive(f.num)) return [{ key: col.key, count: 1, label: `${col.label}: ${numberFilterLabel(f.num)}` }];
+      const parts = [...(f.text ? [`"${f.text}"`] : []), ...(f.values ?? [])];
+      if (f.values && !f.values.length) return [{ key: col.key, count: 1, label: `${col.label}: ingen valgt` }];
+      if (!parts.length) return [];
+      return [{ key: col.key, count: parts.length, label: parts.length === 1 ? `${col.label}: ${parts[0] || '(tom)'}` : col.label }];
+    }),
+  );
+
+  // Gemte filtre: kolonnefiltre og sortering, der vises som chips ved hurtigfiltrene
+  readonly savedFilters = signal<SavedFilter[]>([]);
+  private nextSavedId = 1;
+
+  readonly activeSavedId = computed(() => {
+    const filters = JSON.stringify(this.filters());
+    return (
+      this.savedFilters().find(
+        (s) => JSON.stringify(s.filters) === filters && s.sortKey === this.sortKey() && s.sortDirection === this.sortDirection(),
+      )?.id ?? null
+    );
+  });
+  readonly canSaveFilter = computed(() => this.columnFiltered() && this.activeSavedId() === null);
+
+  // Antal gemte filtre, der er plads til ved siden af hurtigfiltrene. Resten samles i en dropdown
+  private readonly visibleSavedCount = computed(() => {
+    const saved = this.savedFilters();
+    let budget = this.width() - (this.inlineOpen() ? INLINE_PANEL_WIDTH : 0) - 32 - 380 - 620;
+    let count = 0;
+    for (const s of saved) {
+      const w = 40 + s.name.length * 8 + 8;
+      const reserve = count < saved.length - 1 ? 150 : 0;
+      if (budget - w < reserve && count < saved.length - 1) break;
+      if (budget - w < 0) break;
+      budget -= w;
+      count++;
+    }
+    return count;
+  });
+  readonly visibleSaved = computed(() => this.savedFilters().slice(0, this.visibleSavedCount()));
+  readonly overflowSaved = computed(() => this.savedFilters().slice(this.visibleSavedCount()));
+  readonly savedItems = computed<SegmentItem[]>(() => this.visibleSaved().map((s) => ({ id: String(s.id), text: s.name })));
+  readonly savedIndex = computed(() => this.visibleSaved().findIndex((s) => s.id === this.activeSavedId()));
+  readonly overflowNames = computed(() => this.overflowSaved().map((s) => s.name));
+  readonly overflowIndex = computed(() => this.overflowSaved().findIndex((s) => s.id === this.activeSavedId()));
+
+  applySaved(saved: SavedFilter | undefined) {
+    if (!saved || saved.id === this.activeSavedId()) return;
+    this.snapshotRows();
+    this.quick.set(new Set());
+    this.filters.set(structuredClone(saved.filters));
+    this.sortKey.set(saved.sortKey);
+    this.sortDirection.set(saved.sortDirection);
+  }
+
+  saveCurrentFilter() {
+    const suggestion = this.activeFilters().map((f) => f.label).join(', ').slice(0, 40);
+    this.modalController.showModal(
+      { component: SaveFilterDialogComponent, flavor: 'compact', componentProps: { suggestion } },
+      (name?: string) => {
+        if (!name) return;
+        this.savedFilters.update((list) => [
+          ...list,
+          { id: this.nextSavedId++, name, filters: structuredClone(this.filters()), sortKey: this.sortKey(), sortDirection: this.sortDirection() },
+        ]);
+      },
+    );
+  }
+
+  readonly columnFiltered = computed(() => this.activeFilters().length > 0);
+
+  clearFilter(key: ColumnKey) {
+    this.snapshotRows();
+    this.filters.update((f) => this.withFilter(f, key, { text: '', values: null }));
+  }
+
+  clearAllFilters() {
+    this.snapshotRows();
+    this.filters.set({});
   }
 
   setValueFilter(key: ColumnKey, values: string[] | null) {
-    this.filters.update((f) => this.withFilter(f, key, { text: f[key]?.text ?? '', values }));
+    this.snapshotRows();
+    this.filters.update((f) => this.withFilter(f, key, { ...f[key], text: f[key]?.text ?? '', values }));
+  }
+
+  // Rækkernes placering før en sortering eller filtrering, så de kan glide til deres nye plads
+  private rowTops = new Map<string, number>();
+  private flipPending = false;
+
+  private snapshotRows() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    this.rowTops.clear();
+    this.host.nativeElement.querySelectorAll<HTMLElement>('tbody tr[data-id]').forEach((tr) => {
+      this.rowTops.set(tr.dataset['id']!, tr.getBoundingClientRect().top);
+    });
+    this.flipPending = this.rowTops.size > 0;
+  }
+
+  private playRowMotion() {
+    this.flipPending = false;
+    const limit = window.innerHeight + 200;
+    this.host.nativeElement.querySelectorAll<HTMLElement>('tbody tr[data-id]').forEach((tr) => {
+      const top = tr.getBoundingClientRect().top;
+      if (top > limit || top < -200) return;
+      const old = this.rowTops.get(tr.dataset['id']!);
+      const options = { duration: 350, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
+      if (old === undefined) tr.animate([{ opacity: 0 }, { opacity: 1 }], options);
+      else if (Math.abs(old - top) > 1) tr.animate([{ transform: `translateY(${old - top}px)` }, { transform: 'none' }], options);
+    });
+    this.rowTops.clear();
   }
 
   private withFilter(
@@ -326,12 +601,13 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
     next: ColumnFilter,
   ): Partial<Record<ColumnKey, ColumnFilter>> {
     const copy = { ...all };
-    if (!next.text && !next.values) delete copy[key];
+    if (!next.text && !next.values && !numberFilterActive(next.num)) delete copy[key];
     else copy[key] = next;
     return copy;
   }
 
   sortBy(key: ColumnKey, direction: 'asc' | 'desc') {
+    this.snapshotRows();
     this.sortKey.set(key);
     this.sortDirection.set(direction);
   }
@@ -342,15 +618,6 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
       if (side) copy[key] = side;
       else delete copy[key];
       return copy;
-    });
-  }
-
-  chooseColumns() {
-    this.modalController.showModal({
-      component: ColumnChooserComponent,
-      flavor: 'modal',
-      size: 'small',
-      interactWithBackground: true,
     });
   }
 
@@ -415,6 +682,16 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
       this.pinnedCfg();
       untracked(() => this.frozen.set(this.defaultFrozen()));
     });
+    // Slås en funktion fra, nulstilles det, den har sat
+    effect(() => {
+      const c = this.cfg();
+      untracked(() => {
+        if (!c.featureFilter) this.filters.set({});
+        if (!c.featureQuick) this.quick.set(new Set());
+        if (!c.featureSearch) this.search.set('');
+        if (!c.featureSelect) this.selected.set(new Set());
+      });
+    });
     effect(() => {
       this.filters();
       this.quick();
@@ -459,7 +736,128 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
     });
   }
 
+  readonly dragKey = signal<ColumnKey | null>(null);
+  readonly dropKey = signal<ColumnKey | null>(null);
+  readonly dropSide = signal<'before' | 'after'>('before');
+  private justDragged = false;
+  readonly liftRect = signal<{ left: number; top: number; width: number; height: number } | null>(null);
+  readonly dropLine = signal<{ left: number; top: number; height: number } | null>(null);
+
+  // Rammer til skygge og indsætningslinje, så de dækker kolonnens fulde højde
+  private updateReorderGuides(key: ColumnKey) {
+    const root = this.host.nativeElement;
+    const th = root.querySelector<HTMLElement>(`thead th[data-col="${key}"]`);
+    const table = root.querySelector('table');
+    if (!th || !table) return;
+    const h = root.getBoundingClientRect();
+    const t = th.getBoundingClientRect();
+    const bottom = Math.min(table.getBoundingClientRect().bottom, window.innerHeight);
+    const grow = t.width * 0.02;
+    this.liftRect.set({ left: t.left - h.left - grow, top: t.top - h.top, width: t.width + grow * 2, height: Math.max(0, bottom - t.top) });
+    const dropKey = this.dropKey();
+    const over = dropKey ? root.querySelector<HTMLElement>(`thead th[data-col="${dropKey}"]`) : null;
+    if (!over) {
+      this.dropLine.set(null);
+      return;
+    }
+    const r = over.getBoundingClientRect();
+    this.dropLine.set({
+      left: (this.dropSide() === 'before' ? r.left : r.right) - h.left - 1.5,
+      top: r.top - h.top,
+      height: Math.max(0, bottom - r.top),
+    });
+  }
+
+  // Langt tryk på en kolonneoverskrift løfter kolonnen, så den kan flyttes
+  startReorder(e: PointerEvent, col: ColumnDef) {
+    const target = e.target as HTMLElement;
+    if (e.button !== 0 || target.closest('.resizer, app-column-menu, kirby-checkbox')) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let lifted = false;
+    const root = this.host.nativeElement;
+    const ths = () => Array.from(root.querySelectorAll<HTMLElement>('thead th[data-col]'));
+    const timer = setTimeout(() => {
+      lifted = true;
+      this.dragKey.set(col.key);
+      this.updateReorderGuides(col.key);
+      document.body.style.cursor = 'grabbing';
+    }, 400);
+    const move = (ev: PointerEvent) => {
+      if (!lifted) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6) cleanup();
+        return;
+      }
+      const over = ths().find((th) => {
+        const r = th.getBoundingClientRect();
+        return ev.clientX >= r.left && ev.clientX <= r.right;
+      });
+      const key = over?.dataset['col'] as ColumnKey | undefined;
+      if (!over || !key || key === col.key) {
+        this.dropKey.set(null);
+        this.updateReorderGuides(col.key);
+        return;
+      }
+      const r = over.getBoundingClientRect();
+      let side: 'before' | 'after' = ev.clientX < r.left + r.width / 2 ? 'before' : 'after';
+      // Pladserne lige ved siden af kolonnen er dens egen plads, så markøren springer over dem
+      const order = this.cfg().visibleColumns;
+      const from = order.indexOf(col.key);
+      const idx = order.indexOf(key);
+      if (idx === from + 1 && side === 'before') side = 'after';
+      if (idx === from - 1 && side === 'after') side = 'before';
+      this.dropKey.set(key);
+      this.dropSide.set(side);
+      this.updateReorderGuides(col.key);
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', cleanup);
+      document.body.style.cursor = '';
+      this.dragKey.set(null);
+      this.dropKey.set(null);
+      this.liftRect.set(null);
+      this.dropLine.set(null);
+    };
+    const up = () => {
+      const target = this.dropKey();
+      if (lifted && target) {
+        const order = this.cfg().visibleColumns;
+        // Flytter før eller efter målkolonnen
+        const to = this.dropSide() === 'before' ? target : (order[order.indexOf(target) + 1] ?? null);
+        if (to) this.configService.moveColumn(col.key, to);
+        else this.configService.moveColumn(col.key, order[order.length - 1]);
+      }
+      if (lifted) {
+        this.justDragged = true;
+        setTimeout(() => (this.justDragged = false));
+      }
+      cleanup();
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', cleanup);
+  }
+
+  private innerScroll: Element | null = null;
+  private readonly onScroll = () => {
+    const root = this.host.nativeElement;
+    const th = root.querySelector<HTMLElement>('thead th');
+    const row = root.querySelector<HTMLElement>('tbody tr');
+    const stuck = !!th && !!row && row.getBoundingClientRect().top < th.getBoundingClientRect().bottom - 1;
+    root.classList.toggle('stuck', stuck);
+  };
+
   ngOnInit() {
+    document.addEventListener('scroll', this.onScroll, { capture: true, passive: true });
+    // Kirbys side ruller inde i en skjult del af ion-content, hvor scroll-hændelser ikke kommer ud
+    setTimeout(() => {
+      this.innerScroll = this.host.nativeElement.closest('ion-content')?.shadowRoot?.querySelector('.inner-scroll') ?? null;
+      this.innerScroll?.addEventListener('scroll', this.onScroll, { passive: true });
+      this.ngAfterViewChecked();
+    });
     this.observer = new ResizeObserver((entries) => {
       this.width.set(entries[0].contentRect.width);
       this.viewportWidth.set(window.innerWidth);
@@ -467,7 +865,23 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
     this.observer.observe(this.host.nativeElement);
   }
 
+  // Kolonneoverskrifterne hæfter sig lige under værktøjslinjen, så dens højde skal kendes
+  ngAfterViewChecked() {
+    if (this.flipPending) this.playRowMotion();
+    const el = this.host.nativeElement;
+    const h = el.querySelector<HTMLElement>('.toolbar')?.getBoundingClientRect().height ?? 0;
+    const v = `${h}px`;
+    // Sticky-placeringen regnes inden for scroll-beholderens padding, så toppen rykkes op til kanten
+    const pad = this.innerScroll ? parseFloat(getComputedStyle(this.innerScroll).paddingTop) || 0 : 0;
+    if (el.style.getPropertyValue('--sticky-top') !== `${-pad}px`) el.style.setProperty('--sticky-top', `${-pad}px`);
+    const visible = `${this.innerScroll?.clientHeight || window.innerHeight}px`;
+    if (el.style.getPropertyValue('--scroll-h') !== visible) el.style.setProperty('--scroll-h', visible);
+    if (el.style.getPropertyValue('--toolbar-h') !== v) el.style.setProperty('--toolbar-h', v);
+  }
+
   ngOnDestroy() {
+    document.removeEventListener('scroll', this.onScroll, true);
+    this.innerScroll?.removeEventListener('scroll', this.onScroll);
     this.observer?.disconnect();
     this.stopCellDrag();
   }
@@ -644,11 +1058,13 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
   }
 
   sort(key: ColumnKey) {
+    if (this.justDragged) return;
+    this.snapshotRows();
     if (this.sortKey() === key) {
       this.sortDirection.update((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
       this.sortKey.set(key);
-      this.sortDirection.set('asc');
+      this.sortDirection.set(defaultDirection(COLUMNS.find((c) => c.key === key) ?? {}));
     }
   }
 
@@ -729,6 +1145,14 @@ export class PaymentsTableComponent implements OnInit, OnDestroy {
 
   statusAsFlag(status: PaymentStatus): boolean {
     return this.cfg().statusStyle === 'flag' && STATUS_NEEDS_ATTENTION.has(status);
+  }
+
+  statusAsOutline(status: PaymentStatus): boolean {
+    return (
+      this.cfg().statusStyle === 'flag' &&
+      this.cfg().noActionStatusStyle === 'outline' &&
+      !STATUS_NEEDS_ATTENTION.has(status)
+    );
   }
 
   statusColor(status: PaymentStatus): FlagColor {

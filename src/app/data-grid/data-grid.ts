@@ -6,8 +6,9 @@ import { IconComponent } from '@kirbydesign/designsystem/icon';
 import { ItemComponent } from '@kirbydesign/designsystem/item';
 import { MenuComponent } from '@kirbydesign/designsystem/menu';
 import { ModalController } from '@kirbydesign/designsystem/modal';
+import { ActionGroupComponent } from '@kirbydesign/designsystem/action-group';
+import { HeaderActionsDirective, HeaderComponent } from '@kirbydesign/designsystem/header';
 import {
-  PageActionsComponent,
   PageComponent,
   PageContentComponent,
 } from '@kirbydesign/designsystem/page';
@@ -35,7 +36,9 @@ const ACTIVE_CHILD = 'Godkend betalinger';
     IconComponent,
     ItemComponent,
     MenuComponent,
-    PageActionsComponent,
+    ActionGroupComponent,
+    HeaderActionsDirective,
+    HeaderComponent,
     PageComponent,
     PageContentComponent,
     PaymentsTableComponent,

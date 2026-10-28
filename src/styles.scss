@@ -17,9 +17,14 @@ input:not([kirby-input]) {
   font: inherit;
 }
 
-// Under træk i konfigurationskortet må tabellen ikke reagere på hover
-body.config-dragging app-payments-table {
-  pointer-events: none;
+// Under træk i konfigurationskortet må tabellen ikke reagere på hover, og tekst må ikke markeres
+body.config-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+
+  app-payments-table {
+    pointer-events: none;
+  }
 }
 
 /* Kirby section header: label vises under overskriften (Kirby placerer som standard felterne ved siden af hinanden) */
@@ -31,4 +36,15 @@ kirby-section-header ion-item-divider::part(container) {
 kirby-section-header [heading][heading] {
   flex: 1 0 100%;
   margin-bottom: 0 !important;
+}
+
+// Kirbys dropdown-liste skal ligge ovenpå de egne paneler (z-index 2000)
+kirby-popover {
+  z-index: 2100 !important;
+}
+
+// Menuerne har ikke afrundede hjørner, så hover og markering på punkter skal heller ikke have det
+.panel kirby-item {
+  --kirby-content-border-top-radius: 0;
+  --kirby-content-border-bottom-radius: 0;
 }

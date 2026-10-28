@@ -21,6 +21,7 @@
   .brand {
     display: flex;
     align-items: center;
+    justify-content: center;
     height: 50px;
     margin: var(--kirby-spacing-l) var(--kirby-spacing-m);
     flex-shrink: 0;
@@ -165,18 +166,26 @@
 .meta-control {
   position: fixed;
   right: var(--kirby-spacing-l);
-  bottom: var(--kirby-spacing-l);
+  top: var(--kirby-spacing-xs);
   z-index: 10;
   width: 320px;
   max-width: calc(100vw - 2 * var(--kirby-spacing-s));
   user-select: none;
+
+  ::ng-deep ion-item {
+    --background: var(--kirby-decoration-color-purple-10);
+  }
+  kirby-card {
+    --kirby-card-background-color: var(--kirby-decoration-color-purple-10);
+    background-color: var(--kirby-decoration-color-purple-10) !important;
+  }
 
   .grab {
     display: flex;
     align-items: center;
     cursor: grab;
     touch-action: none;
-    color: var(--kirby-medium);
+    color: var(--kirby-decoration-color-purple-30);
 
     &:active {
       cursor: grabbing;
@@ -196,6 +205,6 @@
   }
   .meta-control {
     right: var(--kirby-spacing-s);
-    bottom: var(--kirby-spacing-s);
+    top: var(--kirby-spacing-xs);
   }
 }
