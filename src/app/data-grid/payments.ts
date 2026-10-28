@@ -129,7 +129,9 @@ export function createPayments(count = 200): Payment[] {
     const t = TYPES[(i * 7 + (i % 3)) % TYPES.length];
     const owner = OWNERS[i % OWNERS.length];
     const currency = t.currencies[i % t.currencies.length];
-    const day = 28 - (i % 28);
+    // Hver sjette betaling er gennemført og ligger i fortiden, så Alle og Kommende ikke viser de samme rækker
+    const completed = i % 6 === 0;
+    const day = completed ? 1 + (i % 13) : 28 - (i % 28);
     const toAccount =
       t.type === 'Udland'
         ? `DK${50 + (i % 40)} 0040 ${String(100000 + i * 7919).slice(0, 6)} ${String(10 + (i % 80)).padStart(2, '0')}`
@@ -148,7 +150,7 @@ export function createPayments(count = 200): Payment[] {
       fromAccount: owner.accounts[i % owner.accounts.length],
       accountOwner: owner.name,
       reference: REFERENCES[i % REFERENCES.length],
-      status: STATUSES[(i * 5) % STATUSES.length],
+      status: completed ? 'Gennemført' : STATUSES[(i * 5) % STATUSES.length],
       recipientCheck: t.type === 'Indbetalingskort' || t.type === 'Løn' ? 'Modtagertjek fravalgt' : CHECKS[i % CHECKS.length],
     });
   }

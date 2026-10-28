@@ -67,25 +67,38 @@
       </div>
 
       <kirby-page
-        [title]="detail()?.recipient ?? 'Godkend betalinger'"
-        [subtitle]="detail() ? formatAmount(detail()!.amount) + ' ' + detail()!.currency + ' · ' + formatDate(detail()!.date) : ''"
         [toolbarTitle]="detail()?.recipient ?? 'Godkend betalinger'"
         [hideBackButton]="!detail()"
         defaultBackHref="/"
         (backButtonClick)="closeDetail()"
         maxWidth="full"
       >
-        @if (detail(); as p) {
-          <kirby-page-actions>
-              <button kirby-button attentionLevel="1" [disabled]="!canApprove(p)" (click)="payments.approve(p)">
-                Godkend
-              </button>
-              <button kirby-button attentionLevel="3" [disabled]="!canStop(p)" (click)="payments.stop(p)">
-                Stop
-              </button>
-              <button kirby-button attentionLevel="3" [disabled]="!canEdit(p)">Rediger</button>
-          </kirby-page-actions>
-        }
+        <kirby-header
+          [title]="detail()?.recipient ?? 'Godkend betalinger'"
+          [subtitle1]="detail() ? formatAmount(detail()!.amount) + ' ' + detail()!.currency + ' · ' + formatDate(detail()!.date) : null"
+        >
+          <ng-template kirbyHeaderActions>
+            @if (detail(); as p) {
+              <kirby-action-group>
+                <button kirby-button attentionLevel="1" [disabled]="!canApprove(p)" (click)="payments.approve(p)">
+                  Godkend
+                </button>
+                <button kirby-button attentionLevel="3" [disabled]="!canStop(p)" (click)="payments.stop(p)">
+                  Stop
+                </button>
+                <button kirby-button attentionLevel="3" [disabled]="!canEdit(p)">Rediger</button>
+              </kirby-action-group>
+            } @else {
+              <!-- [OPEN POINT: hvad Godkend og mere-menuen gør på listesiden] -->
+              <kirby-action-group>
+                <button kirby-button attentionLevel="1">Godkend alle</button>
+                <button kirby-button attentionLevel="3" aria-label="Flere handlinger">
+                  <kirby-icon name="more"></kirby-icon>
+                </button>
+              </kirby-action-group>
+            }
+          </ng-template>
+        </kirby-header>
         <kirby-page-content>
           <app-payments-table></app-payments-table>
         </kirby-page-content>
@@ -118,7 +131,7 @@
             </svg>
           </span>
           Udviklerindstillinger
-          <button kirby-button slot="end" attentionLevel="3" size="sm" (click)="openSettings()">
+          <button kirby-button slot="end" attentionLevel="2" size="sm" (click)="openSettings()">
             <kirby-icon name="adjust"></kirby-icon>
             Indstil
           </button>

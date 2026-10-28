@@ -23,7 +23,7 @@ import {
   PaymentStatus,
 } from './payments';
 import { PaymentsService } from './payments.service';
-import { Container } from './table-config';
+import { Container, Density } from './table-config';
 
 /** panel = inline eller sidepanel, modal = Kirby-modal, page = egen side (headeren ligger i Kirby-siden) */
 export type DetailPresentation = 'panel' | 'modal' | 'page';
@@ -155,6 +155,7 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
   styles: `
     :host {
       display: block;
+      background-color: var(--kirby-background-color);
     }
     :host(:not(.page)) {
       padding: var(--kirby-spacing-m);
@@ -259,6 +260,15 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
       gap: var(--kirby-spacing-xs) var(--kirby-spacing-m);
       align-items: center;
     }
+    :host(.dense) {
+      dt,
+      dd,
+      ul.activities li,
+      .match-text {
+        font-size: var(--kirby-font-size-s);
+        line-height: var(--kirby-line-height-s);
+      }
+    }
     dt {
       color: var(--kirby-text-color-semi-dark);
     }
@@ -311,6 +321,12 @@ export class PaymentDetailComponent implements OnChanges {
   @Input() paymentId?: number;
   @Input() presentation: DetailPresentation = 'panel';
   @Input() variant: Container = 'canvas';
+  /** Rækkehøjden i tabellen; kompakt og standard giver mindre tekst i detaljerne. */
+  @Input() density: Density = 'standard';
+
+  @HostBinding('class.dense') get dense() {
+    return this.density !== 'spacious';
+  }
   @Output() closed = new EventEmitter<void>();
 
   readonly ButtonSize = ButtonSize;

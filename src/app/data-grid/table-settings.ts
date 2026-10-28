@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { ButtonComponent } from '@kirbydesign/designsystem/button';
 import { NgTemplateOutlet } from '@angular/common';
 import { SectionHeaderComponent } from '@kirbydesign/designsystem/section-header';
@@ -7,6 +7,7 @@ import { IconComponent } from '@kirbydesign/designsystem/icon';
 import { CardComponent } from '@kirbydesign/designsystem/card';
 import { PageProgressComponent, PageTitleComponent } from '@kirbydesign/designsystem/page';
 import { DropdownComponent } from '@kirbydesign/designsystem/dropdown';
+import { SegmentedControlComponent } from '@kirbydesign/designsystem/segmented-control';
 import { ToggleComponent } from '@kirbydesign/designsystem/toggle';
 import { RadioComponent, RadioGroupComponent } from '@kirbydesign/designsystem/radio';
 import {
@@ -18,9 +19,22 @@ import {
   LoadingMode,
   TableConfig,
   TableConfigService,
+  ActionsForce,
+  NoActionStatusStyle,
+  PresetId,
+  PRESETS,
 } from './table-config';
 
-type GroupId = 'detail' | 'theme' | 'columns' | 'actions' | 'loading' | 'payments' | 'user';
+type GroupId = 'features' | 'detail' | 'theme' | 'columns' | 'actions' | 'loading' | 'payments' | 'user';
+
+type FeatureKey =
+  | 'featureSelect'
+  | 'featureQuick'
+  | 'featureSearch'
+  | 'featureSettings'
+  | 'featureSort'
+  | 'featureFilter'
+  | 'featureRowActions';
 
 interface Option<T> {
   value: T;
@@ -33,6 +47,7 @@ interface Option<T> {
     PageTitleComponent,
     DropdownComponent,
     ToggleComponent,
+    SegmentedControlComponent,
     NgTemplateOutlet,
     SectionHeaderComponent,
     ButtonComponent,
@@ -92,8 +107,16 @@ interface Option<T> {
       </kirby-page-progress>
     }
     <kirby-page-title>Udviklerindstillinger</kirby-page-title>
-    <div class="content">
+    <div class="content" [class.forward]="group() !== null">
       @switch (group()) {
+        @case ('features') {
+          <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Funktioner', label: 'Vælg hvilke funktioner tabellen har' }"></ng-container>
+          <kirby-card class="rows">
+            @for (f of features; track f.key) {
+              <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: f.title, checked: cfg()[f.key], change: featureSetter(f.key) }"></ng-container>
+            }
+          </kirby-card>
+        }
         @case ('detail') {
           <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Detaljer', label: 'Vælg hvordan dataobjekternes detaljer skal præsenteres' }"></ng-container>
           <kirby-card class="rows">
@@ -133,6 +156,7 @@ interface Option<T> {
           <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Brugerkonfiguration', label: 'Vælg hvad brugeren selv må ændre' }"></ng-container>
           <kirby-card class="rows">
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Justere kolonnebredde', checked: cfg().userColumnWidth, change: userSetter('userColumnWidth') }"></ng-container>
+            <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Flytte rundt på kolonner', checked: cfg().userColumnReorder, change: userSetter('userColumnReorder') }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Til- og fravælge kolonner', checked: cfg().userColumnChoice, change: setUserChoice }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Ændre rækkehøjde', checked: cfg().userDensity, change: userSetter('userDensity') }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Til- og fravælge zebrastriber', checked: cfg().userZebra, change: userSetter('userZebra') }"></ng-container>
@@ -144,6 +168,10 @@ interface Option<T> {
           <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Handlinger', label: 'Vælg hvordan handlinger på hver række skal vises' }"></ng-container>
           <kirby-card class="rows">
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Overflow', checked: cfg().actionsOverflow, change: setOverflow }"></ng-container>
+          </kirby-card>
+          <ng-container *ngTemplateOutlet="labelHeader; context: { $implicit: 'Hvis overflow er slået fra' }"></ng-container>
+          <kirby-card class="rows">
+            <ng-container *ngTemplateOutlet="selectRow; context: { $implicit: 'Tving visning', options: actionsForceOptions, key: 'actionsForce' }"></ng-container>
           </kirby-card>
         }
         @case ('loading') {
@@ -162,12 +190,25 @@ interface Option<T> {
           <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Betalingsoversigt', label: 'Vælg hvordan betalingsoversigten skal præsenteres' }"></ng-container>
           <kirby-card class="rows">
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Vis status med flag', checked: cfg().statusStyle === 'flag', change: setStatusFlag }"></ng-container>
+            <ng-container *ngTemplateOutlet="selectRow; context: { $implicit: 'Status uden handling', options: noActionOptions, key: 'noActionStatusStyle' }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Vis modtagertjek som flag', checked: cfg().checkStyle === 'flag', change: setCheckFlag }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Vis flag foran valutakoder', checked: cfg().currencyStyle === 'flag', change: setCurrencyFlag }"></ng-container>
           </kirby-card>
         }
         @default {
           <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Indstillinger', label: 'Vælg hvordan tabellen skal se ud og fungere' }"></ng-container>
+          <ng-container *ngTemplateOutlet="labelHeader; context: { $implicit: 'Hurtigvalg' }"></ng-container>
+          <div class="presets">
+            <kirby-segmented-control
+              mode="chip"
+              aria-label="Hurtigvalg"
+              [items]="presetItems"
+              [selectedIndex]="presetIndex()"
+              (selectedIndexChange)="applyPreset(presets[$event].id)"
+            ></kirby-segmented-control>
+            <button kirby-button attentionLevel="3" size="md" (click)="reset()">Nulstil til standard</button>
+          </div>
+          <ng-container *ngTemplateOutlet="labelHeader; context: { $implicit: 'Alle indstillinger' }"></ng-container>
           <kirby-card class="rows">
             @for (g of groups; track g.id) {
               <kirby-item [selectable]="true" disclosure="arrow-more" (click)="group.set(g.id)">
@@ -176,9 +217,6 @@ interface Option<T> {
               </kirby-item>
             }
           </kirby-card>
-          <div class="reset">
-            <button kirby-button attentionLevel="3" (click)="reset()">Nulstil til standard</button>
-          </div>
         }
       }
     </div>
@@ -186,6 +224,29 @@ interface Option<T> {
   styles: `
     :host {
       display: block;
+    }
+    .content > * {
+      animation: slide-back 240ms ease-out;
+    }
+    .content.forward > * {
+      animation-name: slide-forward;
+    }
+    @keyframes slide-forward {
+      from {
+        opacity: 0;
+        transform: translateX(32px);
+      }
+    }
+    @keyframes slide-back {
+      from {
+        opacity: 0;
+        transform: translateX(-32px);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .content > * {
+        animation: none;
+      }
     }
     .content {
       padding: var(--kirby-spacing-s) var(--kirby-spacing-m) var(--kirby-spacing-l);
@@ -211,8 +272,13 @@ interface Option<T> {
     .value {
       min-width: 220px;
     }
-    .reset {
-      margin-top: var(--kirby-spacing-m);
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--kirby-spacing-s);
+      margin-bottom: var(--kirby-spacing-l);
     }
   `,
 })
@@ -221,7 +287,33 @@ export class TableSettingsComponent {
 
   readonly cfg = this.service.config;
   readonly group = signal<GroupId | null>(null);
+  readonly presetItems = [
+    { id: 'simple', text: 'Simpel' },
+    { id: 'complex', text: 'Avanceret' },
+  ];
+  /** Markerer det hurtigvalg, som konfigurationen svarer til lige nu */
+  readonly presetIndex = computed(() => {
+    const c = this.cfg() as unknown as Record<string, unknown>;
+    const ids: PresetId[] = ['simple', 'complex'];
+    return ids.findIndex((id) =>
+      Object.entries(PRESETS[id]).every(([k, v]) => JSON.stringify(c[k]) === JSON.stringify(v)),
+    );
+  });
+  readonly presets: { id: PresetId; title: string }[] = [
+    { id: 'simple', title: 'Simpel' },
+    { id: 'complex', title: 'Avanceret' },
+  ];
+  readonly features: { key: FeatureKey; title: string }[] = [
+    { key: 'featureSelect', title: 'Vælg flere' },
+    { key: 'featureQuick', title: 'Hurtigfiltre' },
+    { key: 'featureSearch', title: 'Søgning' },
+    { key: 'featureSettings', title: 'Indstillinger' },
+    { key: 'featureSort', title: 'Kolonnesortering' },
+    { key: 'featureFilter', title: 'Kolonnefiltrering' },
+    { key: 'featureRowActions', title: 'Rækkehandlinger' },
+  ];
   readonly groups: { id: GroupId; title: string }[] = [
+    { id: 'features', title: 'Funktioner' },
     { id: 'detail', title: 'Detaljer' },
     { id: 'theme', title: 'Tema' },
     { id: 'columns', title: 'Kolonner' },
@@ -234,6 +326,8 @@ export class TableSettingsComponent {
   summary(id: GroupId): string {
     const c = this.cfg();
     switch (id) {
+      case 'features':
+        return `${this.features.filter((f) => c[f.key]).length} af ${this.features.length} til`;
       case 'detail':
         return this.labelOf(this.detailOptions, c.detailMode);
       case 'theme':
@@ -241,7 +335,7 @@ export class TableSettingsComponent {
       case 'columns':
         return c.columnOverflow === 'scroll' ? 'Rulning' : 'Skjul kolonner';
       case 'actions':
-        return c.actionsOverflow ? 'Overflow' : 'Dynamisk';
+        return c.actionsOverflow ? 'Overflow' : this.labelOf(this.actionsForceOptions, c.actionsForce);
       case 'loading':
         return this.labelOf(this.loadingOptions, c.loading);
       case 'payments': {
@@ -249,18 +343,27 @@ export class TableSettingsComponent {
         return `${n} med flag`;
       }
       case 'user': {
-        const n = [c.userColumnWidth, c.userColumnChoice, c.userDensity, c.userZebra, c.userDividers, c.userScroll].filter(Boolean).length;
-        return `${n} af 6 til`;
+        const n = [c.userColumnWidth, c.userColumnReorder, c.userColumnChoice, c.userDensity, c.userZebra, c.userDividers, c.userScroll].filter(Boolean).length;
+        return `${n} af 7 til`;
       }
     }
   }
+  readonly actionsForceOptions: Option<ActionsForce>[] = [
+    { value: 'auto', label: 'Dynamisk' },
+    { value: 'icon', label: 'Ikonknapper' },
+    { value: 'full', label: 'Knapper med ikon og tekst' },
+  ];
+  readonly noActionOptions: Option<NoActionStatusStyle>[] = [
+    { value: 'text', label: 'Normal tekst' },
+    { value: 'outline', label: 'Outline-flag' },
+  ];
   readonly detailOptions: Option<DetailMode>[] = [
     { value: 'none', label: 'Ingen detaljer' },
     { value: 'side-nonmodal', label: 'Sidepanel (ikke-modalt)' },
     { value: 'side-modal', label: 'Sidepanel (modalt)' },
     { value: 'modal', label: 'Modal' },
     { value: 'inline', label: 'Inline-panel' },
-    { value: 'page', label: 'Ny side (pil i stedet for handlinger)' },
+    { value: 'page', label: 'Ny side' },
   ];
   readonly loadingOptions: Option<LoadingMode>[] = [
     { value: 'all', label: 'Alle rækker' },
@@ -315,8 +418,12 @@ export class TableSettingsComponent {
   readonly setDividers = (v: boolean) => this.update('columnDividers', v);
   readonly setScroll = (v: boolean) => this.update('columnOverflow', v ? 'scroll' : 'hide');
   readonly setWrap = (v: boolean) => this.update('textHandling', v ? 'wrap' : 'truncate');
-  readonly userSetter = (key: 'userColumnWidth' | 'userDensity' | 'userZebra' | 'userDividers' | 'userScroll') =>
+  readonly userSetter = (key: 'userColumnWidth' | 'userColumnReorder' | 'userDensity' | 'userZebra' | 'userDividers' | 'userScroll') =>
     (v: boolean) => this.update(key, v);
+  readonly featureSetter = (key: FeatureKey) => (v: boolean) => this.update(key, v);
+  applyPreset(id: PresetId) {
+    this.service.applyPreset(id);
+  }
   readonly setUserChoice = (v: boolean) => this.update('userColumnChoice', v);
   readonly setOverflow = (v: boolean) => this.update('actionsOverflow', v);
   readonly setStatusFlag = (v: boolean) => this.update('statusStyle', v ? 'flag' : 'text');

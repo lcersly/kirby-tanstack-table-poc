@@ -1,10 +1,10 @@
 <ng-template #statusTpl let-p>
   @if (statusAsFlag(p.status)) {
     <kirby-flag [size]="flagSize()" [themeColor]="statusColor(p.status)">{{ p.status }}</kirby-flag>
-  } @else if (cfg().statusStyle === 'flag') {
-    <span class="status-detail">{{ p.status }}</span>
+  } @else if (statusAsOutline(p.status)) {
+    <kirby-flag [size]="flagSize()">{{ p.status }}</kirby-flag>
   } @else {
-    {{ p.status }}
+    <span>{{ p.status }}</span>
   }
 </ng-template>
 
@@ -13,7 +13,7 @@
     [check]="p.recipientCheck"
     [asFlag]="cfg().checkStyle === 'flag'"
     [flagSize]="flagSize()"
-    [avatarSize]="avatarSize()"
+    [avatarSize]="checkAvatarSize()"
   ></app-recipient-check>
 </ng-template>
 
@@ -98,12 +98,14 @@
         (click)="openDetail(p, $event)"
       >
         <div class="card-top">
-          <kirby-checkbox
-[size]="cfg().checkboxSize"
-            [checked]="isSelected(p)"
-            (checkedChange)="toggleRow(p, $event)"
-            [attr.aria-label]="'Vælg betaling til ' + p.recipient"
-          ></kirby-checkbox>
+          @if (cfg().featureSelect) {
+            <kirby-checkbox
+              [size]="checkboxSize()"
+              [checked]="isSelected(p)"
+              (checkedChange)="toggleRow(p, $event)"
+              [attr.aria-label]="'Vælg betaling til ' + p.recipient"
+            ></kirby-checkbox>
+          }
           <div class="card-main">
             <div class="kirby-text-small-bold">{{ p.recipient }}</div>
             <div class="kirby-text-small muted">
@@ -126,7 +128,7 @@
         </div>
         @if (pageMode()) {
           <kirby-icon class="card-chevron" name="arrow-more" aria-hidden="true"></kirby-icon>
-        } @else {
+        } @else if (cfg().featureRowActions) {
         <div class="card-actions">
           <ng-container *ngTemplateOutlet="actionsTpl; context: { $implicit: p }"></ng-container>
         </div>
@@ -155,18 +157,22 @@
     <table class="kirby-table">
       <thead>
         <tr>
-          <th class="col-select">
-            <kirby-checkbox
-[size]="cfg().checkboxSize"
-              [checked]="allSelected()"
-              [indeterminate]="someSelected()"
-              (checkedChange)="toggleAll($event)"
-              aria-label="Vælg alle betalinger"
-            ></kirby-checkbox>
-          </th>
+          @if (cfg().featureSelect) {
+            <th class="col-select">
+              <kirby-checkbox
+                [size]="checkboxSize()"
+                [checked]="allSelected()"
+                [indeterminate]="someSelected()"
+                (checkedChange)="toggleAll($event)"
+                aria-label="Vælg alle betalinger"
+              ></kirby-checkbox>
+            </th>
+          }
           @for (col of columns(); track col.key) {
             <th
               [attr.data-col]="col.key"
+              [class.lifted]="dragKey() === col.key"
+              (pointerdown)="cfg().userColumnReorder ? startReorder($event, col) : null"
               [class.fz-l]="frozenInfo()[col.key]?.side === 'left'"
               [class.fz-r]="frozenInfo()[col.key]?.side === 'right'"
               [class.fz-edge]="frozenInfo()[col.key]?.edge"
@@ -180,15 +186,19 @@
               "
             >
               <span class="th-inner">
-                <button type="button" class="th-sort" (click)="sort(col.key)">
-                  <span>{{ col.label }}</span>
-                  @if (sortKey() === col.key) {
-                    <kirby-icon
-                      class="sort-icon"
-                      [name]="sortDirection() === 'asc' ? 'arrow-up-fill' : 'arrow-down-fill'"
-                    ></kirby-icon>
-                  }
-                </button>
+                @if (cfg().featureSort) {
+                  <button type="button" class="th-sort" [class.active]="sortKey() === col.key" (click)="sort(col.key)">
+                    <span>{{ col.label }}</span>
+                    @if (sortKey() === col.key) {
+                      <app-sf-arrow class="sort-icon" [direction]="sortDirection() === defaultDirection(col) ? 'down' : 'up'" [size]="12"></app-sf-arrow>
+                    } @else {
+                      <app-sf-arrow class="sort-ghost" direction="down" [size]="12"></app-sf-arrow>
+                    }
+                  </button>
+                } @else {
+                  <span class="th-sort static">{{ col.label }}</span>
+                }
+                @if (hasColumnMenu()) {
                 <app-column-menu
                   [column]="col"
                   [filter]="filters()[col.key]"
@@ -196,13 +206,20 @@
                   [sortDirection]="sortKey() === col.key ? sortDirection() : null"
                   [frozenSide]="frozen()[col.key] ?? null"
                   [canChoose]="cfg().userColumnChoice"
+                  [canSort]="cfg().featureSort"
+                  [canFilter]="cfg().featureFilter"
+                  [canFreeze]="canFreeze()"
                   (textChange)="setTextFilter(col.key, $event)"
                   (valuesChange)="setValueFilter(col.key, $event)"
+                  (numberChange)="setNumberFilter(col.key, $event)"
                   (sort)="sortBy(col.key, $event)"
                   (freeze)="setFrozen(col.key, $event)"
-                  (chooseColumns)="chooseColumns()"
+                  [canResize]="cfg().userColumnWidth"
+                  (fit)="autoFit(col)"
+                  (fitAll)="autoFitAll()"
                   (resetColumns)="resetColumns()"
                 ></app-column-menu>
+                }
               </span>
               @if (cfg().userColumnWidth) {
                 <span
@@ -220,7 +237,7 @@
           }
           @if (pageMode()) {
             <th class="col-actions col-disclosure"><span class="visually-hidden">Vis detaljer</span></th>
-          } @else {
+          } @else if (cfg().featureRowActions) {
             <th class="col-actions" data-col="__actions"><span class="visually-hidden">Handlinger</span></th>
           }
         </tr>
@@ -231,6 +248,7 @@
         }
         @for (p of displayRows(); track p.id; let ri = $index) {
           <tr
+            [attr.data-id]="p.id"
             [attr.data-index]="rowOffset() + ri"
             [class.alt]="(rowOffset() + ri) % 2 === 1"
             [class.selected]="isSelected(p)"
@@ -240,14 +258,16 @@
             (click)="openDetail(p, $event)"
             (keydown.enter)="openDetail(p, $event)"
           >
-            <td class="col-select">
-              <kirby-checkbox
-[size]="cfg().checkboxSize"
-                [checked]="isSelected(p)"
-                (checkedChange)="toggleRow(p, $event)"
-                [attr.aria-label]="'Vælg betaling til ' + p.recipient"
-              ></kirby-checkbox>
-            </td>
+            @if (cfg().featureSelect) {
+              <td class="col-select">
+                <kirby-checkbox
+                  [size]="checkboxSize()"
+                  [checked]="isSelected(p)"
+                  (checkedChange)="toggleRow(p, $event)"
+                  [attr.aria-label]="'Vælg betaling til ' + p.recipient"
+                ></kirby-checkbox>
+              </td>
+            }
             @for (col of columns(); track col.key; let ci = $index) {
               <td
                 [attr.data-r]="rowOffset() + ri"
@@ -264,6 +284,7 @@
                 [class.text-align-right]="col.align === 'right'"
                 [class.col-nowrap]="col.key === 'amount' || col.key === 'currency' || col.key === 'date' || col.key === 'status' || col.key === 'recipientCheck'"
                 [attr.data-col]="col.key"
+                [class.lifted]="dragKey() === col.key"
               >
                 @switch (col.key) {
                   @case ('date') {
@@ -289,13 +310,15 @@
                 }
               </td>
             }
-            <td class="col-actions" [class.col-disclosure]="pageMode()">
-              @if (pageMode()) {
-                <kirby-icon name="arrow-more" aria-hidden="true"></kirby-icon>
-              } @else {
-                <ng-container *ngTemplateOutlet="actionsTpl; context: { $implicit: p }"></ng-container>
-              }
-            </td>
+            @if (showActionsColumn()) {
+              <td class="col-actions" [class.col-disclosure]="pageMode()">
+                @if (pageMode()) {
+                  <kirby-icon name="arrow-more" aria-hidden="true"></kirby-icon>
+                } @else {
+                  <ng-container *ngTemplateOutlet="actionsTpl; context: { $implicit: p }"></ng-container>
+                }
+              </td>
+            }
           </tr>
         }
         @if (bottomSpacer() > 0) {
@@ -304,6 +327,12 @@
       </tbody>
     </table>
   </div>
+  @if (liftRect(); as r) {
+    <div class="lift-shadow" [style.left.px]="r.left" [style.top.px]="r.top" [style.width.px]="r.width" [style.height.px]="r.height"></div>
+  }
+  @if (dropLine(); as d) {
+    <div class="drop-line" [style.left.px]="d.left" [style.top.px]="d.top" [style.height.px]="d.height"></div>
+  }
 }
 @if (loading() === 'paging') {
   <nav class="table-footer" aria-label="Sider">
@@ -334,29 +363,84 @@
 <ng-template #stageTpl>
   <div class="stage" [class.has-inline]="inlineOpen()" [class.has-side]="sideOpen()">
     <div class="main">
+      @if (showToolbar()) {
       <div class="toolbar" role="toolbar" aria-label="Hurtigfiltre og søgning">
-        <kirby-segmented-control
-          class="quick"
-          mode="chip"
-          aria-label="Hurtigfiltre"
-          [items]="quickItems"
-          [selectedIndex]="quickIndex()"
-          (selectedIndexChange)="setQuick($event)"
-        ></kirby-segmented-control>
-        <kirby-form-field class="search">
-          <input
-            kirby-input
-            type="search"
-            size="md"
-            placeholder="Søg"
-            aria-label="Søg i alle kolonner"
-            [value]="search()"
-            (input)="search.set($any($event.target).value)"
-          />
-          <kirby-icon kirby-affix="prefix" name="search"></kirby-icon>
-        </kirby-form-field>
-        <app-user-view-menu #userMenu (chooseColumns)="chooseColumns()" [class.hidden]="!userMenu.any()"></app-user-view-menu>
+        @if (cfg().featureQuick) {
+          <kirby-segmented-control
+            class="quick"
+            [class.inactive]="columnFiltered()"
+            [attr.aria-disabled]="columnFiltered() || null"
+            mode="chip"
+            aria-label="Hurtigfiltre"
+            [items]="quickItems()"
+            [selectedIndex]="quickIndex()"
+            (selectedIndexChange)="setQuick($event)"
+          ></kirby-segmented-control>
+        }
+        @if (savedFilters().length) {
+          @if (cfg().featureQuick) {
+            <span class="vdivider" aria-hidden="true"></span>
+          }
+          @if (savedItems().length) {
+            <kirby-segmented-control
+              class="quick"
+              mode="chip"
+              aria-label="Gemte filtre"
+              [items]="savedItems()"
+              [selectedIndex]="savedIndex()"
+              (selectedIndexChange)="applySaved(visibleSaved()[$event])"
+            ></kirby-segmented-control>
+          }
+          @if (overflowNames().length) {
+            <kirby-dropdown
+              class="more-saved"
+              size="sm"
+              placeholder="Flere filtre"
+              aria-label="Flere gemte filtre"
+              [items]="overflowNames()"
+              [selectedIndex]="overflowIndex()"
+              (change)="applySaved(overflowSaved()[overflowNames().indexOf($event)])"
+            ></kirby-dropdown>
+          }
+        }
+        @if (cfg().featureSearch) {
+          <kirby-form-field class="search">
+            <input
+              kirby-input
+              type="search"
+              size="md"
+              placeholder="Søg"
+              aria-label="Søg i alle kolonner"
+              [value]="search()"
+              (input)="search.set($any($event.target).value)"
+            />
+            <kirby-icon kirby-affix="prefix" name="search"></kirby-icon>
+          </kirby-form-field>
+        }
+        @if (cfg().featureSettings) {
+          <app-user-view-menu #userMenu [class.hidden]="!userMenu.any()"></app-user-view-menu>
+        }
+        @if (activeFilters().length) {
+          <div class="filter-row" role="group" aria-label="Aktive filtre">
+            @for (f of activeFilters(); track f.key) {
+              <span class="chip">
+                @if (f.count > 1) {
+                  <kirby-badge size="md" themeColor="white" [attr.aria-label]="f.count + ' valg'">{{ f.count }}</kirby-badge>
+                }
+                <span class="chip-label">{{ f.label }}</span>
+                <button type="button" class="chip-close" [attr.aria-label]="'Fjern filter på ' + f.label" (click)="clearFilter(f.key)">
+                  <kirby-icon name="close"></kirby-icon>
+                </button>
+              </span>
+            }
+            <button kirby-button size="sm" attentionLevel="3" (click)="clearAllFilters()">Ryd alle filtre</button>
+            @if (canSaveFilter()) {
+              <button kirby-button size="sm" attentionLevel="2" (click)="saveCurrentFilter()">Gem filter</button>
+            }
+          </div>
+        }
       </div>
+      }
       <ng-container *ngTemplateOutlet="listTpl"></ng-container>
     </div>
 
@@ -378,6 +462,7 @@
             [paymentId]="detailId() ?? undefined"
             presentation="panel"
             [variant]="cfg().container"
+            [density]="cfg().density"
             (closed)="closeDetail()"
           ></app-payment-detail>
         }
@@ -400,6 +485,7 @@
               [paymentId]="detailId() ?? undefined"
               presentation="panel"
               [variant]="cfg().container"
+            [density]="cfg().density"
               (closed)="closeDetail()"
             ></app-payment-detail>
           </aside>
@@ -417,6 +503,7 @@
               [paymentId]="detailId() ?? undefined"
               presentation="panel"
               [variant]="cfg().container"
+            [density]="cfg().density"
               (closed)="closeDetail()"
             ></app-payment-detail>
           </aside>
@@ -431,6 +518,7 @@
     [paymentId]="pageDetailId() ?? undefined"
     presentation="page"
     [variant]="cfg().container"
+            [density]="cfg().density"
     (closed)="closeDetail()"
   ></app-payment-detail>
 </ng-template>

@@ -1,5 +1,6 @@
 :host {
   display: block;
+  position: relative;
   width: 100%;
   // Skillelinjer følger underlaget: canvas (light) og hævet kort (white)
   --divider-color: var(--kirby-semi-light);
@@ -9,6 +10,11 @@
 
 :host(.on-card) {
   --divider-color: var(--kirby-light);
+}
+
+:host(.on-card),
+:host(.on-stroked) {
+  --toolbar-bg: var(--kirby-white);
 }
 
 .muted {
@@ -22,11 +28,6 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
-}
-
-.status-detail {
-  font-size: var(--kirby-font-size-xs);
-  color: var(--kirby-text-color-semi-dark);
 }
 
 .table-scroll {
@@ -59,6 +60,11 @@
     --cell-padding-y: var(--kirby-spacing-xs);
     --row-height: 64px;
     --header-height: 40px;
+
+    td {
+      font-size: var(--kirby-font-size-n);
+      line-height: var(--kirby-line-height-n);
+    }
   }
 
   table {
@@ -101,8 +107,41 @@
 
   &.sticky-header thead th {
     position: sticky;
-    top: var(--sticky-top, 0);
+    // Overlap på 1px, så rækkerne ikke kan titte frem mellem værktøjslinjen og overskriften
+    top: calc(var(--toolbar-h, 0px) + var(--sticky-top, 0px) - 1px);
     z-index: 2;
+  }
+
+  // Skygge under den hæftede top, når rækkerne ruller ind under den
+  // Med sidelæns rulning er tabellen sin egen scroll-container, så den får en højde og ruller lodret indeni
+  &.sticky-header:not(.fit) {
+    overflow-y: auto;
+    max-height: calc(var(--scroll-h, 100vh) - var(--toolbar-h, 0px));
+  }
+  &.sticky-header:not(.fit) thead th {
+    top: 0;
+  }
+
+  &.sticky-header thead th::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  // Hele kolonnen løftes og bliver en anelse større; skygge og indsætningslinje tegnes som ét element
+  th.lifted,
+  td.lifted {
+    z-index: 5;
+    background-color: var(--kirby-white);
+    transform: scale(1.04);
+    cursor: grabbing;
+  }
+  td.lifted:not(.fz-l):not(.fz-r) {
+    position: relative;
   }
 
   .col-select {
@@ -111,6 +150,11 @@
     max-width: var(--pin-select-width);
     padding-left: var(--kirby-spacing-s);
     padding-right: 0;
+    position: relative;
+    z-index: 1;
+  }
+  thead .col-select {
+    z-index: 3;
   }
 
   &.pin-left {
@@ -147,7 +191,11 @@
     gap: var(--kirby-spacing-xxs);
   }
   th.align-right .th-inner {
-    justify-content: flex-end;
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    .th-sort {
+      flex-direction: row-reverse;
+    }
   }
   .th-sort {
     display: inline-flex;
@@ -158,18 +206,33 @@
     background: transparent;
     color: inherit;
     font: inherit;
-    font-weight: var(--kirby-font-weight-bold);
+    font-size: var(--kirby-font-size-xs);
+    line-height: var(--kirby-line-height-xs);
+    font-weight: var(--kirby-font-weight-normal);
+    color: var(--kirby-text-color-semi-dark);
     cursor: pointer;
     white-space: nowrap;
+  }
+  // Som i Kirby table: aktiv sortering er fed og sort
+  .th-sort.active {
+    font-weight: var(--kirby-font-weight-bold);
+    color: var(--kirby-text-color-black);
+  }
+  // Hint om standardsortering ved hover på en sorterbar overskrift
+  .sort-ghost {
+    visibility: hidden;
+    color: var(--kirby-text-color-semi-dark);
+  }
+  th:hover .sort-ghost {
+    visibility: visible;
+  }
+  .th-sort.static {
+    cursor: default;
   }
   .th-sort:focus-visible {
     outline: 2px solid var(--kirby-primary);
   }
-  .sort-icon {
-    --kirby-icon-size: 16px;
-    width: 16px;
-    height: 16px;
-  }
+
 
   &.pin-right .col-actions {
     position: sticky;
@@ -274,11 +337,14 @@
 
   // Blød skygge på det indhold, der kan rulle ind under sticky header og fastlåste kolonner.
   // Skyggen er en gradient pr. celle uden afrunding, så den løber sammenhængende langs hele linjen
+  &.is-stuck thead th {
+    box-shadow: var(--sh-div, 0 0 0 0 transparent), inset 0 1px 0 var(--divider-color);
+  }
   &.is-stuck thead th::after {
     content: '';
     position: absolute;
     left: 0;
-    right: 0;
+    right: -1px;
     top: 100%;
     height: 14px;
     pointer-events: none;
@@ -306,7 +372,7 @@
 
   &.col-dividers {
     th:not(.col-actions):not(:last-child):not(:nth-last-child(2)),
-    td:not(.col-select):not(.col-actions):not(:last-child):not(:nth-last-child(2)) {
+    td:not(.col-actions):not(:last-child):not(:nth-last-child(2)) {
       border-right: 1px solid var(--divider-color);
     }
     .fz-edge {
@@ -470,13 +536,13 @@ tr.active-row,
 .inline-panel > app-payment-detail {
   position: sticky;
   top: var(--sticky-top, 0);
-  max-height: calc(100vh - var(--sticky-top, 0px));
+  max-height: calc(var(--scroll-h, 100vh) - var(--sticky-top, 0px));
   overflow-y: auto;
 }
 
 .side-panel {
   overflow-y: auto;
-  height: calc(100vh - var(--sticky-top, 0px));
+  height: calc(var(--scroll-h, 100vh) - var(--sticky-top, 0px));
 }
 
 // Panelet følger tabellens ramme: inline-panelet ligger i samme kort/canvas som tabellen,
@@ -484,10 +550,6 @@ tr.active-row,
 .side-panel {
   background-color: var(--kirby-background-color);
   border-radius: var(--kirby-border-radius);
-}
-
-:host(.on-card) .side-panel {
-  background-color: var(--kirby-white);
 }
 
 :host(.on-stroked) .side-panel {
@@ -500,6 +562,10 @@ tr.active-row,
   align-self: stretch;
   max-width: 100%;
   border-left: 1px solid var(--divider-color);
+  background-color: var(--kirby-background-color);
+  // Ovenpå fastgjorte kolonner og overskrifter, når tabellen ruller sidelæns
+  position: relative;
+  z-index: 6;
 }
 
 .side-panel {
@@ -535,10 +601,6 @@ tr.active-row,
     margin: 0;
     border-radius: 0;
     background-color: var(--kirby-background-color);
-  }
-
-  &.is-card .side-panel {
-    background-color: var(--kirby-white);
   }
 
   &.is-stroked .side-panel {
@@ -732,7 +794,61 @@ tr.spacer {
   }
 }
 
+// [OPEN POINT: Kirby har ingen chip-komponent i denne version; chippen er bygget af Kirby-tokens]
+.filter-row {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kirby-spacing-xs);
+  padding-top: var(--kirby-spacing-xs);
+  border-top: 1px solid var(--divider-color);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kirby-spacing-xs);
+  height: var(--kirby-spacing-l);
+  padding: 0 var(--kirby-spacing-xxs) 0 var(--kirby-spacing-s);
+  border-radius: var(--kirby-border-radius-pill, 999px);
+  background-color: var(--kirby-black);
+  color: var(--kirby-black-contrast);
+  font-size: var(--kirby-font-size-xs);
+  white-space: nowrap;
+
+  .chip-label {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chip-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    // Samme ikonstørrelse som Kirbys xs-knapper
+    --kirby-icon-font-size: var(--kirby-icon-font-size-xs, 16px);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+
+    &:hover {
+      background-color: rgb(255 255 255 / 16%);
+    }
+  }
+}
+
 .toolbar {
+  position: sticky;
+  top: var(--sticky-top, 0px);
+  z-index: 3;
+  background-color: var(--toolbar-bg, var(--kirby-background-color));
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -742,6 +858,21 @@ tr.spacer {
 
   .quick {
     flex: 0 0 auto;
+  }
+  // Badges sidder uden for knapperne og blev klippet af rullebeholderen
+  .quick ::ng-deep ion-segment {
+    padding-top: var(--kirby-spacing-s);
+    padding-right: var(--kirby-spacing-m);
+  }
+  .vdivider {
+    align-self: stretch;
+    width: 1px;
+    margin: var(--kirby-spacing-xxs) 0;
+    background-color: var(--divider-color);
+  }
+  .more-saved {
+    flex: 0 0 180px;
+    margin: 0;
   }
   .search {
     flex: 1;
@@ -769,11 +900,35 @@ tr.spacer {
     z-index: 4;
     touch-action: none;
   }
-  .resizer:hover {
-    background: linear-gradient(to right, transparent 2px, var(--kirby-primary) 2px, var(--kirby-primary) 4px, transparent 4px);
-  }
-  &.truncate td.sized .cell-text,
-  &.fit.truncate td.sized .cell-text {
+  // Brugerens bredde vinder over standardafkortningen (samme specificitet som reglerne ovenfor)
+  &.truncate td.sized:not(.col-nowrap):not(.col-actions):not(.col-select) .cell-text,
+  &.fit.truncate td.sized:not(.col-nowrap):not(.col-actions):not(.col-select) .cell-text {
     max-width: calc(var(--w) - 32px);
   }
+}
+
+:host(.stuck) .table-scroll.sticky-header thead th::after {
+  opacity: 1;
+}
+
+.quick.inactive {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.lift-shadow,
+.drop-line {
+  position: absolute;
+  pointer-events: none;
+}
+.lift-shadow {
+  z-index: 4;
+  box-shadow:
+    -6px 0 10px -6px rgb(0 0 0 / 35%),
+    6px 0 10px -6px rgb(0 0 0 / 35%);
+}
+.drop-line {
+  z-index: 10;
+  width: 3px;
+  background-color: var(--kirby-primary);
 }
