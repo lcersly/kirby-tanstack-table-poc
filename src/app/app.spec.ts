@@ -1,7 +1,8 @@
+import { Component } from '@angular/core';
 import { Location } from '@angular/common';
 import { provideLocationMocks } from '@angular/common/testing';
 import { TestBed } from '@angular/core/testing';
-import { NavigationEnd, provideRouter, Router } from '@angular/router';
+import { NavigationEnd, provideRouter, Router, Routes } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { filter, firstValueFrom } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -27,11 +28,24 @@ vi.mock('@kirbydesign/designsystem/form-field', async () => {
   return { InputComponent: MockInputComponent };
 });
 
+@Component({
+  selector: 'app-table-playground',
+  template: '<main class="table-playground"><h1>Table Playground</h1></main>',
+})
+class StubTablePlayground {}
+
+// Data Grid kræver Kirby/Ionic og indlæses derfor ikke i enhedstests
+const testRoutes: Routes = routes.map((route) =>
+  route.path === 'prototype/table-playground'
+    ? { path: route.path, title: route.title, component: StubTablePlayground }
+    : route,
+);
+
 describe('Playspace navigation', () => {
   async function openApp(url: string) {
     TestBed.configureTestingModule({
       providers: [
-        provideRouter([{ path: '', component: App, children: routes }]),
+        provideRouter([{ path: '', component: App, children: testRoutes }]),
         provideLocationMocks(),
       ],
     });

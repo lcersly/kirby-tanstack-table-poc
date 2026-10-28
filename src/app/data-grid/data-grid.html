@@ -1,0 +1,129 @@
+<kirby-app>
+  <div class="shell">
+    <nav class="side-nav" aria-label="Hovedmenu">
+      <div class="brand">
+        <!-- [OPEN POINT: logo følger bankens tema, her Jyske Bank] -->
+        <img src="logo-light.svg" alt="Jyske Bank" />
+      </div>
+      <ul class="nav-list">
+        @for (item of navItems; track item.label) {
+          @if (item.divider) {
+            <li class="divider" role="separator"></li>
+          }
+          <li>
+            <a
+              href="#"
+              (click)="$event.preventDefault(); item.children ? toggle(item) : null"
+              [class.toggle]="item.children"
+              [attr.aria-expanded]="item.children ? expanded().has(item.label) : null"
+            >
+              <kirby-icon [name]="item.icon"></kirby-icon>
+              <span class="label">{{ item.label }}</span>
+              @if (item.children) {
+                <kirby-icon
+                  class="chevron"
+                  [class.open]="expanded().has(item.label)"
+                  name="arrow-more"
+                ></kirby-icon>
+              }
+            </a>
+            @if (item.children && expanded().has(item.label)) {
+              <ul class="sub-list">
+                @for (child of item.children; track child) {
+                  <li>
+                    <a
+                      href="#"
+                      (click)="$event.preventDefault()"
+                      [class.active]="child === activeChild"
+                      [attr.aria-current]="child === activeChild ? 'page' : null"
+                      >{{ child }}</a
+                    >
+                  </li>
+                }
+              </ul>
+            }
+          </li>
+        }
+      </ul>
+      <div class="nav-footer">
+        <button kirby-button attentionLevel="3" size="sm">
+          <kirby-icon name="log-out"></kirby-icon>
+          Log ud
+        </button>
+        <!-- Fiktivt kunde-id -->
+        <div class="kirby-text-xsmall customer">Kunde-id 1234567 · DEMO</div>
+      </div>
+    </nav>
+
+    <main class="content" [class.bleed]="bleed()">
+      <div class="mobile-nav">
+        <kirby-menu [buttonSize]="ButtonSize.SM" aria-label="Menu">
+          @for (item of navItems; track item.label) {
+            <kirby-item>{{ item.label }}</kirby-item>
+          }
+          <kirby-item>{{ activeChild }}</kirby-item>
+        </kirby-menu>
+        <span class="kirby-text-normal-bold">Netbank Erhverv</span>
+      </div>
+
+      <kirby-page
+        [title]="detail()?.recipient ?? 'Godkend betalinger'"
+        [subtitle]="detail() ? formatAmount(detail()!.amount) + ' ' + detail()!.currency + ' · ' + formatDate(detail()!.date) : ''"
+        [toolbarTitle]="detail()?.recipient ?? 'Godkend betalinger'"
+        [hideBackButton]="!detail()"
+        defaultBackHref="/"
+        (backButtonClick)="closeDetail()"
+        maxWidth="full"
+      >
+        @if (detail(); as p) {
+          <kirby-page-actions>
+              <button kirby-button attentionLevel="1" [disabled]="!canApprove(p)" (click)="payments.approve(p)">
+                Godkend
+              </button>
+              <button kirby-button attentionLevel="3" [disabled]="!canStop(p)" (click)="payments.stop(p)">
+                Stop
+              </button>
+              <button kirby-button attentionLevel="3" [disabled]="!canEdit(p)">Rediger</button>
+          </kirby-page-actions>
+        }
+        <kirby-page-content>
+          <app-payments-table></app-payments-table>
+        </kirby-page-content>
+      </kirby-page>
+    </main>
+
+    <!-- Prototype-kontrol: er ikke en del af den endelige side -->
+    <div
+      class="meta-control"
+      [style.transform]="'translate(' + offset().x + 'px,' + offset().y + 'px)'"
+    >
+      <kirby-card>
+        <kirby-item>
+          <span
+            slot="start"
+            class="grab"
+            role="button"
+            tabindex="0"
+            aria-label="Flyt konfiguration. Brug piletaster eller træk."
+            (pointerdown)="startDrag($event)"
+            (pointermove)="drag($event)"
+            (pointerup)="endDrag($event)"
+            (pointercancel)="endDrag($event)"
+            (keydown)="nudge($event)"
+          >
+            <svg width="16" height="24" viewBox="0 0 16 24" fill="currentColor" aria-hidden="true">
+              <circle cx="5" cy="6" r="1.5" /><circle cx="11" cy="6" r="1.5" />
+              <circle cx="5" cy="12" r="1.5" /><circle cx="11" cy="12" r="1.5" />
+              <circle cx="5" cy="18" r="1.5" /><circle cx="11" cy="18" r="1.5" />
+            </svg>
+          </span>
+          Udviklerindstillinger
+          <button kirby-button slot="end" attentionLevel="3" size="sm" (click)="openSettings()">
+            <kirby-icon name="adjust"></kirby-icon>
+            Indstil
+          </button>
+        </kirby-item>
+      </kirby-card>
+    </div>
+  </div>
+</kirby-app>

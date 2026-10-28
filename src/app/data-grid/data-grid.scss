@@ -1,0 +1,201 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100vh;
+  background-color: var(--kirby-background-color);
+}
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--kirby-tertiary);
+  color: var(--kirby-tertiary-contrast);
+  overflow: hidden;
+
+  .brand {
+    display: flex;
+    align-items: center;
+    height: 50px;
+    margin: var(--kirby-spacing-l) var(--kirby-spacing-m);
+    flex-shrink: 0;
+
+    img {
+      height: 24px;
+    }
+  }
+
+  ul,
+  li {
+    height: auto;
+    min-height: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .nav-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 var(--kirby-spacing-xxs);
+  }
+
+  a {
+    display: flex;
+    align-items: center;
+    gap: var(--kirby-spacing-s);
+    box-sizing: border-box;
+    min-height: 40px;
+    padding: var(--kirby-spacing-xxs) var(--kirby-spacing-s);
+    border-radius: var(--kirby-border-radius-s);
+    color: inherit;
+    text-decoration: none;
+    font-size: var(--kirby-font-size-n);
+    line-height: 1.3334;
+    font-weight: 400;
+
+    &:hover {
+      background: var(--kirby-white-overlay-30);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--kirby-white);
+      outline-offset: -2px;
+    }
+
+    &.active,
+    &.active:hover {
+      background: var(--kirby-primary);
+      color: var(--kirby-primary-contrast);
+      font-weight: 700;
+    }
+  }
+
+  .label {
+    flex: 1;
+  }
+
+  .toggle[aria-expanded='true'] {
+    font-weight: 700;
+  }
+
+  .chevron {
+    transition: transform 0.15s;
+    &.open {
+      transform: rotate(90deg);
+    }
+  }
+
+  .sub-list a {
+    // Underpunkter flugter med teksten på hovedpunkterne (ikon 24px + mellemrum)
+    padding-left: calc(var(--kirby-spacing-s) + 24px + var(--kirby-spacing-s));
+  }
+
+  .divider {
+    height: 1px;
+    margin: var(--kirby-spacing-xs) 0;
+    background: var(--kirby-white-overlay-20);
+  }
+
+  .nav-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--kirby-spacing-s);
+    padding: var(--kirby-spacing-m);
+    flex-shrink: 0;
+
+    button {
+      --kirby-button-background-color: rgb(255 255 255 / 15%);
+      --kirby-button-color: rgb(255 255 255);
+    }
+  }
+
+  .customer {
+    font-size: 12px;
+    line-height: 12px;
+    color: var(--kirby-white);
+  }
+}
+
+.content {
+  position: relative;
+  min-width: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+
+  kirby-page {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+  }
+}
+
+.content.bleed {
+  --page-content-padding-start: 0px;
+  --page-content-padding-end: 0px;
+
+  ::ng-deep .page-header-container {
+    padding-inline: var(--kirby-spacing-s);
+  }
+}
+
+@media (min-width: 768px) {
+  .content.bleed ::ng-deep .page-header-container {
+    padding-inline: var(--kirby-spacing-xxl);
+  }
+}
+
+.mobile-nav {
+  display: none;
+  align-items: center;
+  gap: var(--kirby-spacing-s);
+  padding: var(--kirby-spacing-xs) var(--kirby-spacing-s);
+  border-bottom: 1px solid var(--kirby-semi-light);
+}
+
+.meta-control {
+  position: fixed;
+  right: var(--kirby-spacing-l);
+  bottom: var(--kirby-spacing-l);
+  z-index: 10;
+  width: 320px;
+  max-width: calc(100vw - 2 * var(--kirby-spacing-s));
+  user-select: none;
+
+  .grab {
+    display: flex;
+    align-items: center;
+    cursor: grab;
+    touch-action: none;
+    color: var(--kirby-medium);
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+}
+
+@media (max-width: 767px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .side-nav {
+    display: none;
+  }
+  .mobile-nav {
+    display: flex;
+  }
+  .meta-control {
+    right: var(--kirby-spacing-s);
+    bottom: var(--kirby-spacing-s);
+  }
+}

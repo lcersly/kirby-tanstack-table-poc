@@ -17,6 +17,16 @@ export default tseslint.config(
     extends: [...angular.configs.templateRecommended, ...angular.configs.templateAccessibility],
   },
   {
+    // Data Grid er en prototype med klikbare rækker og Kirby-menuer; reglerne slækkes kun her
+    files: ['src/app/data-grid/**/*.ts', 'src/app/data-grid/**/*.html'],
+    rules: {
+      '@angular-eslint/no-output-native': 'off',
+      '@angular-eslint/template/click-events-have-key-events': 'off',
+      '@angular-eslint/template/interactive-supports-focus': 'off',
+      '@angular-eslint/template/role-has-required-aria': 'off',
+    },
+  },
+  {
     files: ['**/*.mjs'],
     extends: [eslint.configs.recommended],
   },
