@@ -1,3 +1,4 @@
+import { SfIconComponent } from './sf-icon';
 import {
   AfterViewChecked,
   Component,
@@ -138,6 +139,7 @@ const ROW_HEIGHTS = { compact: 32, standard: 44, spacious: 64 } as const;
 @Component({
   selector: 'app-payments-table',
   imports: [
+    SfIconComponent,
     AffixDirective,
     FormFieldComponent,
     InputComponent,
@@ -278,8 +280,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     const key = this.sortKey();
     const dir = this.sortDirection() === 'asc' ? 1 : -1;
     const filters = this.filters();
-    // Hurtigfiltrene er inaktive, mens der filtreres i kolonnerne
-    const quick = this.columnFiltered() ? [] : QUICK_FILTERS.filter((q) => this.quick().has(q.id));
+    const quick = QUICK_FILTERS.filter((q) => this.quick().has(q.id));
     const term = this.search().trim().toLowerCase();
     return this.payments()
       .filter((p) => this.matches(p, filters))
@@ -388,7 +389,8 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     ];
   });
   readonly quickIndex = computed(() => {
-    const id = this.columnFiltered() ? undefined : [...this.quick()][0];
+    if (this.activeSavedId() !== null) return -1;
+    const id = [...this.quick()][0];
     return id ? this.quickItems().findIndex((q) => q.id === id) : 0;
   });
 
@@ -396,6 +398,8 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     this.snapshotRows();
     const id = this.quickItems()[index]?.id;
     this.quick.set(!id || id === 'all' ? new Set() : new Set([id]));
+    // Et hurtigfilter afløser de kolonnefiltre, der er sat
+    if (id && id !== 'all') this.filters.set({});
   }
 
   // Kolonnebredde: brugerens egen bredde (hvis tilladt) ellers standardbredden
@@ -523,8 +527,6 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   });
   readonly visibleSaved = computed(() => this.savedFilters().slice(0, this.visibleSavedCount()));
   readonly overflowSaved = computed(() => this.savedFilters().slice(this.visibleSavedCount()));
-  readonly savedItems = computed<SegmentItem[]>(() => this.visibleSaved().map((s) => ({ id: String(s.id), text: s.name })));
-  readonly savedIndex = computed(() => this.visibleSaved().findIndex((s) => s.id === this.activeSavedId()));
   readonly overflowNames = computed(() => this.overflowSaved().map((s) => s.name));
   readonly overflowIndex = computed(() => this.overflowSaved().findIndex((s) => s.id === this.activeSavedId()));
 
@@ -537,8 +539,24 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     this.sortDirection.set(saved.sortDirection);
   }
 
+  // Enkelt værdi: værdien. Flere værdier i én kolonne: antal + kolonnenavn i flertal. Flere kolonner: første kolonne + antal øvrige
+  private suggestFilterName(): string {
+    const cols = COLUMNS.filter((c) => this.activeFilters().some((f) => f.key === c.key));
+    if (cols.length > 1) return `${cols[0].label} + ${cols.length - 1}`;
+    const col = cols[0];
+    if (!col) return '';
+    const f = this.filters()[col.key];
+    if (f && numberFilterActive(f.num)) return numberFilterLabel(f.num);
+    const parts = [...(f?.text ? [f.text] : []), ...(f?.values ?? [])];
+    return parts.length === 1 ? parts[0] : `${parts.length} ${col.plural}`;
+  }
+
+  removeSaved(id: number) {
+    this.savedFilters.update((list) => list.filter((s) => s.id !== id));
+  }
+
   saveCurrentFilter() {
-    const suggestion = this.activeFilters().map((f) => f.label).join(', ').slice(0, 40);
+    const suggestion = this.suggestFilterName();
     this.modalController.showModal(
       { component: SaveFilterDialogComponent, flavor: 'compact', componentProps: { suggestion } },
       (name?: string) => {
@@ -584,13 +602,20 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   private playRowMotion() {
     this.flipPending = false;
     const limit = window.innerHeight + 200;
+    let entering = 0;
     this.host.nativeElement.querySelectorAll<HTMLElement>('tbody tr[data-id]').forEach((tr) => {
       const top = tr.getBoundingClientRect().top;
       if (top > limit || top < -200) return;
       const old = this.rowTops.get(tr.dataset['id']!);
       const options = { duration: 350, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
-      if (old === undefined) tr.animate([{ opacity: 0 }, { opacity: 1 }], options);
-      else if (Math.abs(old - top) > 1) tr.animate([{ transform: `translateY(${old - top}px)` }, { transform: 'none' }], options);
+      // Nye rækker glider let ind nedefra efter hinanden, så skift mellem helt forskellige lister også er synligt
+      if (old === undefined) {
+        tr.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], {
+          ...options,
+          delay: Math.min(entering++, 12) * 25,
+          fill: 'backwards',
+        });
+      } else if (Math.abs(old - top) > 1) tr.animate([{ transform: `translateY(${old - top}px)` }, { transform: 'none' }], options);
     });
     this.rowTops.clear();
   }

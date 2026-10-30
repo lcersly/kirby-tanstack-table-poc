@@ -17,6 +17,8 @@ export type ColumnKey =
 export interface ColumnDef {
   key: ColumnKey;
   label: string;
+  /** Flertal med småt, bruges i navnet på gemte filtre */
+  plural: string;
   align?: 'right';
   /** Lavere tal = vigtigere. Bruges, når kolonner skjules ved pladsmangel. */
   priority: number;
@@ -36,18 +38,18 @@ export function defaultDirection(col: Pick<ColumnDef, 'kind'>): 'asc' | 'desc' {
 }
 
 export const COLUMNS: ColumnDef[] = [
-  { key: 'date', label: 'Dato', priority: 1, width: 110, noHide: true, kind: 'date' },
-  { key: 'recipient', label: 'Modtager', priority: 0, width: 240, noHide: true, filter: 'text' },
-  { key: 'amount', label: 'Beløb', align: 'right', priority: 2, width: 120, noHide: true, kind: 'number', filter: 'number' },
-  { key: 'currency', label: 'Valuta', priority: 7, width: 80 },
-  { key: 'type', label: 'Betalingstype', priority: 5, width: 140 },
-  { key: 'subtype', label: 'Undertype', priority: 8, width: 130 },
-  { key: 'toAccount', label: 'Til konto', priority: 9, width: 190, filter: 'text' },
-  { key: 'fromAccount', label: 'Fra konto', priority: 10, width: 160 },
-  { key: 'accountOwner', label: 'Kontoejer', priority: 12, width: 200 },
-  { key: 'reference', label: 'Bilagsreference', priority: 11, width: 150, filter: 'text' },
-  { key: 'status', label: 'Status', priority: 3, width: 200 },
-  { key: 'recipientCheck', label: 'Modtagertjek', priority: 6, width: 170 },
+  { key: 'date', label: 'Dato', plural: 'datoer', priority: 1, width: 110, noHide: true, kind: 'date' },
+  { key: 'recipient', label: 'Modtager', plural: 'modtagere', priority: 0, width: 240, noHide: true, filter: 'text' },
+  { key: 'amount', label: 'Beløb', plural: 'beløb', align: 'right', priority: 2, width: 120, noHide: true, kind: 'number', filter: 'number' },
+  { key: 'currency', label: 'Valuta', plural: 'valutaer', priority: 7, width: 80 },
+  { key: 'type', label: 'Betalingstype', plural: 'betalingstyper', priority: 5, width: 140 },
+  { key: 'subtype', label: 'Undertype', plural: 'undertyper', priority: 8, width: 130 },
+  { key: 'toAccount', label: 'Til konto', plural: 'til konti', priority: 9, width: 190, filter: 'text' },
+  { key: 'fromAccount', label: 'Fra konto', plural: 'fra konti', priority: 10, width: 160 },
+  { key: 'accountOwner', label: 'Kontoejer', plural: 'kontoejere', priority: 12, width: 200 },
+  { key: 'reference', label: 'Bilagsreference', plural: 'bilagsreferencer', priority: 11, width: 150, filter: 'text' },
+  { key: 'status', label: 'Status', plural: 'statusser', priority: 3, width: 200 },
+  { key: 'recipientCheck', label: 'Modtagertjek', plural: 'modtagertjek', priority: 6, width: 170 },
 ];
 
 export type Density = 'compact' | 'standard' | 'spacious';

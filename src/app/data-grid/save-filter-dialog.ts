@@ -1,16 +1,16 @@
 import { Component, inject, signal } from '@angular/core';
 import { ButtonComponent } from '@kirbydesign/designsystem/button';
+import { EmptyStateComponent } from '@kirbydesign/designsystem/empty-state';
 import { FormFieldComponent, InputComponent } from '@kirbydesign/designsystem/form-field';
 import { COMPONENT_PROPS, ModalController } from '@kirbydesign/designsystem/modal';
 
 /** Lille dialog, hvor brugeren bekræfter navnet på det filter, der gemmes */
 @Component({
   selector: 'app-save-filter-dialog',
-  imports: [ButtonComponent, FormFieldComponent, InputComponent],
+  imports: [EmptyStateComponent, ButtonComponent, FormFieldComponent, InputComponent],
   template: `
-    <div class="dialog">
-      <h2 class="kirby-text-large-bold">Gem filter</h2>
-      <p class="kirby-text-normal">Bekræft navnet på filteret. Det vises sammen med hurtigfiltrene.</p>
+    <article>
+      <kirby-empty-state title="Gem filter" subtitle="Bekræft navnet på filteret. Det vises sammen med hurtigfiltrene."></kirby-empty-state>
       <kirby-form-field>
         <input
           kirby-input
@@ -24,27 +24,32 @@ import { COMPONENT_PROPS, ModalController } from '@kirbydesign/designsystem/moda
           (keydown.enter)="save()"
         />
       </kirby-form-field>
-      <div class="actions">
-        <button kirby-button attentionLevel="2" (click)="cancel()">Annullér</button>
+      <div class="buttongroup">
+        <button kirby-button attentionLevel="3" (click)="cancel()">Annullér</button>
         <button kirby-button attentionLevel="1" [disabled]="!name().trim()" (click)="save()">Gem filter</button>
       </div>
-    </div>
+    </article>
   `,
+  // Layout som Kirbys Alert: samme afstande og knapper, der deler bredden 50/50
   styles: `
-    .dialog {
+    article {
       display: flex;
       flex-direction: column;
       gap: var(--kirby-spacing-s);
-      padding: var(--kirby-spacing-m);
+      padding: var(--kirby-spacing-s);
+      padding-top: var(--kirby-spacing-m);
     }
-    h2,
-    p {
+    kirby-form-field {
       margin: 0;
     }
-    .actions {
+    .buttongroup {
       display: flex;
-      justify-content: flex-end;
-      gap: var(--kirby-spacing-xs);
+      column-gap: var(--kirby-spacing-xxs);
+    }
+    .buttongroup button {
+      flex: 1 1 0;
+      min-width: 0;
+      margin-inline: 0;
     }
   `,
 })

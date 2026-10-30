@@ -157,6 +157,15 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
       display: block;
       background-color: var(--kirby-background-color);
     }
+        // Tabel i hævet kort: detaljerne har kortets farve, og grupperne har canvas-farven uden elevation
+    :host(.variant-card:not(.modal)) {
+      background-color: var(--kirby-white);
+
+      .group-card {
+        background-color: var(--kirby-background-color);
+        box-shadow: none;
+      }
+    }
     :host(:not(.page)) {
       padding: var(--kirby-spacing-m);
     }
@@ -315,7 +324,7 @@ export class PaymentDetailComponent implements OnChanges {
   }
 
   @HostBinding('class') get hostClass() {
-    return `variant-${this.variant}${this.presentation === 'page' ? ' page' : ''}`;
+    return `variant-${this.variant}${this.presentation === 'page' ? ' page' : ''}${this.presentation === 'modal' ? ' modal' : ''}`;
   }
 
   @Input() paymentId?: number;

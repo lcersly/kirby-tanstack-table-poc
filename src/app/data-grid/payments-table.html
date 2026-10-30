@@ -143,6 +143,7 @@
     [class.pin-left]="pinLeft()"
     [class.pin-right]="pinRight()"
     [class.zebra]="cfg().zebra"
+    [class.plain-header]="!cfg().featureSort && !cfg().featureFilter"
     [class.col-dividers]="cfg().columnDividers"
     [class.hl-cell]="cfg().highlight === 'cell'"
     [class.is-stuck]="stuck()"
@@ -368,8 +369,6 @@
         @if (cfg().featureQuick) {
           <kirby-segmented-control
             class="quick"
-            [class.inactive]="columnFiltered()"
-            [attr.aria-disabled]="columnFiltered() || null"
             mode="chip"
             aria-label="Hurtigfiltre"
             [items]="quickItems()"
@@ -381,26 +380,42 @@
           @if (cfg().featureQuick) {
             <span class="vdivider" aria-hidden="true"></span>
           }
-          @if (savedItems().length) {
-            <kirby-segmented-control
-              class="quick"
-              mode="chip"
-              aria-label="Gemte filtre"
-              [items]="savedItems()"
-              [selectedIndex]="savedIndex()"
-              (selectedIndexChange)="applySaved(visibleSaved()[$event])"
-            ></kirby-segmented-control>
+          @if (visibleSaved().length) {
+            <div class="saved-chips" role="group" aria-label="Gemte filtre">
+              @for (saved of visibleSaved(); track saved.id) {
+                <span class="saved-chip" [class.selected]="saved.id === activeSavedId()">
+                  <button type="button" class="saved-chip-label" [attr.aria-pressed]="saved.id === activeSavedId()" (click)="applySaved(saved)">
+                    {{ saved.name }}
+                  </button>
+                  <button type="button" class="saved-chip-close" [attr.aria-label]="'Fjern gemt filter ' + saved.name" (click)="removeSaved(saved.id)">
+                    <kirby-icon name="close"></kirby-icon>
+                  </button>
+                </span>
+              }
+            </div>
           }
           @if (overflowNames().length) {
             <kirby-dropdown
               class="more-saved"
-              size="sm"
+              size="md"
+              [attentionLevel]="overflowIndex() >= 0 ? '2' : '3'"
               placeholder="Flere filtre"
               aria-label="Flere gemte filtre"
               [items]="overflowNames()"
               [selectedIndex]="overflowIndex()"
               (change)="applySaved(overflowSaved()[overflowNames().indexOf($event)])"
             ></kirby-dropdown>
+            @if (overflowIndex() >= 0) {
+              <button
+                kirby-button
+                class="more-saved-remove"
+                attentionLevel="3"
+                [attr.aria-label]="'Fjern gemt filter ' + overflowNames()[overflowIndex()]"
+                (click)="removeSaved(overflowSaved()[overflowIndex()].id)"
+              >
+                <kirby-icon name="close"></kirby-icon>
+              </button>
+            }
           }
         }
         @if (cfg().featureSearch) {
@@ -433,9 +448,15 @@
                 </button>
               </span>
             }
-            <button kirby-button size="sm" attentionLevel="3" (click)="clearAllFilters()">Ryd alle filtre</button>
+            <button kirby-button size="sm" attentionLevel="3" (click)="clearAllFilters()">
+              <kirby-icon name="unsubscribe"></kirby-icon>
+              Ryd alle filtre
+            </button>
             @if (canSaveFilter()) {
-              <button kirby-button size="sm" attentionLevel="2" (click)="saveCurrentFilter()">Gem filter</button>
+              <button kirby-button size="sm" attentionLevel="2" (click)="saveCurrentFilter()">
+                <app-sf-icon name="bookmark" [size]="16"></app-sf-icon>
+                Gem filter
+              </button>
             }
           </div>
         }
