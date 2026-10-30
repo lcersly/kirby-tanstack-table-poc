@@ -1,6 +1,6 @@
 import { Component, input } from '@angular/core';
 
-export type SfIconName = 'filter' | 'pin' | 'fit' | 'fit-all' | 'arrow-up' | 'arrow-down';
+export type SfIconName = 'filter' | 'pin' | 'fit' | 'fit-all' | 'arrow-up' | 'arrow-down' | 'play' | 'bookmark';
 
 const PATHS: Record<SfIconName, string> = {
   filter: 'M4 7h16M7 12h10M10 17h4',
@@ -8,6 +8,8 @@ const PATHS: Record<SfIconName, string> = {
   fit: 'M4 5v14M20 5v14M6.5 12h4M8.5 10l2 2-2 2M17.5 12h-4M15.5 10l-2 2 2 2',
   'fit-all': 'M4 5v14M12 5v14M20 5v14M5.5 12h3M7 10l2 2-2 2M13.5 12h3M15 10l2 2-2 2',
   'arrow-down': 'M12 4.5v15M6.5 14l5.5 5.5 5.5-5.5',
+  bookmark: 'M7 4.5h10v15l-5-3.5-5 3.5v-15Z',
+  play: 'M8 5.5v13l10.5-6.5L8 5.5Z',
   'arrow-up': 'M12 19.5v-15M6.5 10 12 4.5l5.5 5.5',
 };
 

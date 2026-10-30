@@ -12,8 +12,14 @@
   --divider-color: var(--kirby-light);
 }
 
-:host(.on-card),
-:host(.on-stroked) {
+// Markering har sin egen farve (en meget lys tint af tertiary), så den adskiller sig fra zebrastriberne
+:host {
+  --hover-bg: color-mix(in srgb, var(--kirby-tertiary) 6%, var(--kirby-white));
+  --select-bg: color-mix(in srgb, var(--kirby-tertiary) 12%, var(--kirby-white));
+}
+
+// Optegnet kort har canvas som fyld, så værktøjslinjen har ingen egen farve dér
+:host(.on-card) {
   --toolbar-bg: var(--kirby-white);
 }
 
@@ -98,12 +104,17 @@
     padding-bottom: 0;
     vertical-align: middle;
   }
+  // Uden kolonnemenuer er overskrifterne ellers for tætte, så de får 4 px ekstra luft foroven og forneden
+  &.plain-header th {
+    padding-top: var(--kirby-spacing-xxxs);
+    padding-bottom: var(--kirby-spacing-xxxs);
+  }
 
   &.zebra tbody tr.alt {
     --row-bg: var(--kirby-background-color);
   }
   tbody tr.selected {
-    --row-bg: var(--kirby-semi-light);
+    --row-bg: var(--select-bg);
   }
 
   &.sticky-header thead th {
@@ -117,6 +128,7 @@
   // Med sidelæns rulning er tabellen sin egen scroll-container, så den får en højde og ruller lodret indeni
   &.sticky-header:not(.fit) {
     overflow-y: auto;
+    overscroll-behavior: contain;
     max-height: calc(var(--scroll-h, 100vh) - var(--toolbar-h, 0px));
   }
   &.sticky-header:not(.fit) thead th {
@@ -448,7 +460,7 @@
   background-color: var(--kirby-white);
 
   &.selected {
-    background-color: var(--kirby-semi-light);
+    background-color: var(--select-bg);
     border-color: var(--kirby-primary);
   }
 }
@@ -482,8 +494,8 @@
 
 tr.active-row,
 .card.active-row {
-  --row-bg: var(--kirby-semi-light);
-  background-color: var(--kirby-semi-light);
+  --row-bg: var(--select-bg);
+  background-color: var(--select-bg);
 }
 
 .col-disclosure kirby-icon,
@@ -539,10 +551,12 @@ tr.active-row,
   top: var(--sticky-top, 0);
   max-height: calc(var(--scroll-h, 100vh) - var(--sticky-top, 0px));
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .side-panel {
   overflow-y: auto;
+  overscroll-behavior: contain;
   height: calc(var(--scroll-h, 100vh) - var(--sticky-top, 0px));
 }
 
@@ -551,6 +565,13 @@ tr.active-row,
 .side-panel {
   background-color: var(--kirby-background-color);
   border-radius: var(--kirby-border-radius);
+}
+
+:host(.on-card) {
+  .inline-panel,
+  .side-panel {
+    background-color: var(--kirby-white);
+  }
 }
 
 :host(.on-stroked) .side-panel {
@@ -601,7 +622,9 @@ tr.active-row,
     height: auto;
     margin: 0;
     border-radius: 0;
-    background-color: var(--kirby-background-color);
+  }
+  &.is-card .side-panel {
+    background-color: var(--kirby-white);
   }
 
   &.is-stroked .side-panel {
@@ -638,10 +661,19 @@ tr.active-row,
   animation: fade 200ms ease-in reverse forwards;
 }
 .inline-in {
-  animation: inline-in 250ms ease-out;
+  animation: inline-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .inline-out {
-  animation: inline-in 200ms ease-in reverse forwards;
+  animation: inline-in 220ms cubic-bezier(0.4, 0, 1, 1) reverse forwards;
+}
+// Panelet vokser ind fra højre, så tabellen glider med i stedet for at hoppe
+.inline-panel.inline-in,
+.inline-panel.inline-out {
+  overflow: hidden;
+  > app-payment-detail,
+  > app-bulk-summary {
+    min-width: 400px;
+  }
 }
 
 @keyframes slide-in {
@@ -664,12 +696,23 @@ tr.active-row,
 
 @keyframes inline-in {
   from {
+    flex-basis: 0;
     opacity: 0;
-    transform: translateX(24px);
+  }
+  to {
+    flex-basis: 400px;
+    opacity: 1;
+  }
+}
+
+@keyframes inline-in-stacked {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: none;
   }
 }
 
@@ -688,6 +731,12 @@ tr.active-row,
   .inline-panel {
     flex-basis: 100%;
   }
+  .inline-in {
+    animation-name: inline-in-stacked;
+  }
+  .inline-out {
+    animation-name: inline-in-stacked;
+  }
   .stage.has-inline {
     flex-direction: column;
   }
@@ -704,12 +753,12 @@ tr.active-row,
   }
 }
 
-:host(.on-canvas) .table-scroll.zebra tbody tr.alt:not(.selected):not(.active-row) {
+:host(.on-canvas) .table-scroll.zebra tbody tr.alt:not(.selected):not(.active-row):not(.clickable:hover) {
   --row-bg: var(--kirby-white);
   --btn3-bg: var(--kirby-dark-overlay);
 }
 
-:host(.on-card) .table-scroll.zebra tbody tr.alt:not(.selected):not(.active-row) {
+:host(.on-card) .table-scroll.zebra tbody tr.alt:not(.selected):not(.active-row):not(.clickable:hover) {
   --btn3-bg: var(--kirby-white);
 }
 
@@ -737,28 +786,28 @@ tr.active-row,
 
 // Hover, markeret og aktiv række skifter baggrund og dermed knappernes tema
 :host(.on-canvas) .table-scroll:not(.hl-cell) tbody tr.clickable:hover {
-  --row-bg: var(--kirby-white);
+  --row-bg: var(--hover-bg);
   --btn3-bg: var(--kirby-dark-overlay);
 }
 
 :host(.on-card) .table-scroll:not(.hl-cell) tbody tr.clickable:hover {
-  --row-bg: var(--kirby-background-color);
+  --row-bg: var(--hover-bg);
   --btn3-bg: var(--kirby-white);
 }
 
 :host(.on-canvas) .table-scroll.hl-cell tbody tr.clickable td:not(.col-select):not(.col-actions):hover {
-  background-color: var(--kirby-white);
+  background-color: var(--hover-bg);
 }
 
 :host(.on-card) .table-scroll.hl-cell tbody tr.clickable td:not(.col-select):not(.col-actions):hover {
-  background-color: var(--kirby-background-color);
+  background-color: var(--hover-bg);
 }
 
 .table-scroll tbody tr.selected,
 .table-scroll tbody tr.active-row,
 :host(.on-canvas) .table-scroll tbody tr.selected,
 :host(.on-canvas) .table-scroll tbody tr.active-row {
-  --row-bg: var(--kirby-semi-light);
+  --row-bg: var(--select-bg);
   --btn3-bg: var(--kirby-white);
 }
 
@@ -802,7 +851,10 @@ tr.spacer {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--kirby-spacing-xs);
-  padding-top: var(--kirby-spacing-xs);
+  box-sizing: border-box;
+  height: 60px;
+  margin: 0 calc(-1 * var(--kirby-spacing-s));
+  padding: var(--kirby-spacing-xxs) var(--kirby-spacing-s);
   border-top: 1px solid var(--divider-color);
 }
 
@@ -869,7 +921,57 @@ tr.spacer {
     align-self: stretch;
     width: 1px;
     margin: var(--kirby-spacing-xxs) 0;
+    // Segmentet har luft til badges i højre side; den trækkes fra, så afstanden er ens på begge sider
+    margin-left: calc(-1 * var(--kirby-spacing-m));
     background-color: var(--divider-color);
+  }
+  .saved-chips {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--kirby-spacing-xxs);
+  }
+  .saved-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 40px;
+    border-radius: var(--kirby-border-radius-pill, 999px);
+    background-color: color-mix(in srgb, var(--kirby-black) 6%, transparent);
+    color: var(--kirby-black);
+    font-size: var(--kirby-font-size-s);
+    white-space: nowrap;
+
+    &.selected {
+      background-color: var(--kirby-black);
+      color: var(--kirby-black-contrast);
+    }
+    button {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+    .saved-chip-label {
+      padding: 0 var(--kirby-spacing-xs) 0 var(--kirby-spacing-m);
+      border-radius: var(--kirby-border-radius-pill, 999px) 0 0 var(--kirby-border-radius-pill, 999px);
+    }
+    .saved-chip-close {
+      justify-content: center;
+      padding: 0 var(--kirby-spacing-s) 0 0;
+      --kirby-icon-font-size: var(--kirby-icon-font-size-xs, 16px);
+    }
+  }
+  // Badges giver segmenterne ekstra plads foroven, så de øvrige elementer rykkes med, så de flugter
+  .more-saved,
+  .more-saved-remove,
+  .saved-chips,
+  .search,
+  app-user-view-menu {
+    position: relative;
+    top: calc(var(--kirby-spacing-s) * 3 / 8);
   }
   .more-saved {
     flex: 0 0 180px;
@@ -910,11 +1012,6 @@ tr.spacer {
 
 :host(.stuck) .table-scroll.sticky-header thead th::after {
   opacity: 1;
-}
-
-.quick.inactive {
-  opacity: 0.4;
-  pointer-events: none;
 }
 
 .lift-shadow,
