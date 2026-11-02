@@ -28,6 +28,15 @@ vi.mock('@kirbydesign/designsystem/form-field', async () => {
   return { InputComponent: MockInputComponent };
 });
 
+vi.mock('@kirbydesign/designsystem/icon', async () => {
+  const { Directive } = await import('@angular/core');
+
+  class MockIconComponent {}
+  Directive({ selector: 'kirby-icon' })(MockIconComponent);
+
+  return { IconComponent: MockIconComponent };
+});
+
 @Component({
   selector: 'app-table-playground',
   template: '<main class="table-playground"><h1>Table Playground</h1></main>',

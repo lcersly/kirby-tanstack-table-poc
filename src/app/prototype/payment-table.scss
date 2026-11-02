@@ -1,5 +1,5 @@
 .table-scroll {
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid #dce2e7;
   border-radius: 0.45rem;
   background: #fff;
@@ -11,6 +11,11 @@ table {
   color: #172a3a;
   font-size: 0.875rem;
   text-align: left;
+}
+
+table:focus-visible {
+  outline: 2px solid #172a3a;
+  outline-offset: -2px;
 }
 
 th,

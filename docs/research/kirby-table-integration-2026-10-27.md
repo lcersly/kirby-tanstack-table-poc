@@ -1,5 +1,20 @@
 # Kirby table integration research
 
+## Migration update, 2026-11-02
+
+The historical findings below predate
+[kirbydesign/designsystem#4898](https://github.com/kirbydesign/designsystem/pull/4898).
+The POC now uses its published `@kirbydesign/designsystem@11.11.2-dev-f528d7a`
+composable grid. The installed package exports
+`@kirbydesign/designsystem/data-grid-composable` with selector
+`kirby-data-grid-composable`, a table model, projected table markup and
+header/cell components. It requires TanStack as a peer dependency.
+The temporary direct TanStack renderer has been replaced without adding table
+interactions. See the [README](../../README.md#composable-grid-integration)
+for the pinned package set and current limitations.
+
+## Original investigation
+
 **Checked:** 2026-10-27
 **Scope:** Public Kirby and TanStack packages relevant to a desktop Payments-tab table in this public personal POC.
 **Conclusion:** No public Kirby release or preview was found that integrates TanStack Table v9. The user has decided to use TanStack Table directly as a temporary data renderer, then replace it with Kirby's implementation when available. That temporary choice is separate from the verified Kirby API.

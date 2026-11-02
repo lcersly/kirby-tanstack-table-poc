@@ -1,8 +1,11 @@
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
+import { ComposableDataGridComponent } from '@kirbydesign/designsystem/data-grid-composable';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DEMO_COMMIT, KIRBY_VERSION } from './demo-commit.generated';
+import { createSyntheticPayments } from './payment-data';
 import { PaymentOverviewPrototype } from './payment-overview';
 
 vi.mock('@kirbydesign/designsystem/button', async () => {
@@ -23,6 +26,15 @@ vi.mock('@kirbydesign/designsystem/form-field', async () => {
   return { InputComponent: MockInputComponent };
 });
 
+vi.mock('@kirbydesign/designsystem/icon', async () => {
+  const { Directive } = await import('@angular/core');
+
+  class MockIconComponent {}
+  Directive({ selector: 'kirby-icon' })(MockIconComponent);
+
+  return { IconComponent: MockIconComponent };
+});
+
 describe('PaymentOverviewPrototype', () => {
   async function createOverview() {
     await TestBed.configureTestingModule({
@@ -39,6 +51,12 @@ describe('PaymentOverviewPrototype', () => {
     const fixture = await createOverview();
     const root = fixture.nativeElement as HTMLElement;
 
+    expect(fixture.debugElement.query(By.directive(ComposableDataGridComponent))).not.toBeNull();
+    expect(root.querySelector('table[kirbyDataGridTable]')).not.toBeNull();
+    expect(root.querySelector('table')?.tabIndex).toBe(0);
+    expect(root.querySelectorAll('th[kirby-data-grid-header-cell]')).toHaveLength(7);
+    expect(root.querySelectorAll('td[kirby-data-grid-cell]')).toHaveLength(7_000);
+    expect(root.querySelector('thead button')).toBeNull();
     expect(
       Array.from(root.querySelectorAll('thead th'), (header) => header.textContent?.trim()),
     ).toEqual(['Dato', 'Modtager', 'Beløb', 'Valuta', 'Betalingstype', 'Modtagerkonto', 'Status']);
@@ -70,6 +88,22 @@ describe('PaymentOverviewPrototype', () => {
       row.textContent?.trim(),
     );
     expect(firstRender).toHaveLength(4);
+    expect(root.querySelectorAll('td[kirby-data-grid-cell]')).toHaveLength(28);
+    expect(
+      Array.from(root.querySelectorAll('tbody tr'), (row) =>
+        Array.from(row.querySelectorAll('td'), (cell) => cell.textContent?.trim()),
+      ),
+    ).toEqual(
+      createSyntheticPayments(4).map((payment) => [
+        payment.date,
+        payment.recipient,
+        payment.amount,
+        payment.currency,
+        payment.paymentType,
+        payment.destinationAccount,
+        payment.status,
+      ]),
+    );
     expect(root.querySelector('.result-summary')?.textContent).toContain('4 syntetiske betalinger');
 
     input.value = '4';

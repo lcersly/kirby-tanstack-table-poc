@@ -1,33 +1,31 @@
-<div class="table-scroll">
-  <table>
+<kirby-data-grid-composable
+  #grid="kirbyDataGridComposable"
+  class="table-scroll"
+  [data]="payments()"
+  [columns]="columns"
+  [tableOptions]="tableOptions"
+>
+  <table kirbyDataGridTable tabindex="0">
     <caption class="visually-hidden">
       Syntetiske betalinger
     </caption>
     <thead>
-      @for (group of table.getHeaderGroups(); track group.id) {
+      @for (group of grid.table.getHeaderGroups(); track group.id) {
         <tr>
           @for (header of group.headers; track header.id) {
-            <th scope="col">
-              <ng-container *flexRenderHeader="header; let value">
-                {{ value }}
-              </ng-container>
-            </th>
+            <th kirby-data-grid-header-cell scope="col" [headerContext]="header.getContext()"></th>
           }
         </tr>
       }
     </thead>
     <tbody>
-      @for (row of table.getRowModel().rows; track row.id) {
+      @for (row of grid.table.getRowModel().rows; track row.id) {
         <tr>
-          @for (cell of row.getAllCells(); track cell.id) {
-            <td>
-              <ng-container *flexRenderCell="cell; let value">
-                {{ value }}
-              </ng-container>
-            </td>
+          @for (cell of row.getVisibleCells(); track cell.id) {
+            <td kirby-data-grid-cell [cellContext]="cell.getContext()"></td>
           }
         </tr>
       }
     </tbody>
   </table>
-</div>
+</kirby-data-grid-composable>
