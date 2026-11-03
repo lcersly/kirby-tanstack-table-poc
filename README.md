@@ -70,7 +70,10 @@ The POC's `PaymentTablePrototype` projects its own semantic table into
 `@kirbydesign/designsystem/data-grid-composable`. Kirby owns the table instance,
 header/cell rendering and horizontal scroll container. The seven columns,
 Danish formatting, A/B/C layouts and row-count generator remain unchanged.
-Sorting is disabled to preserve the original read-only behavior.
+Each header cycles through ascending, descending and original order.
+Dates sort chronologically and amounts numerically using the raw generated
+values, while text uses Danish collation with natural account-number ordering.
+Sorting does not edit the data, and regenerating rows retains the selected sort.
 The projected table is keyboard-focusable so its horizontally scrolling content
 remains accessible on narrow screens.
 `src/styles.scss` imports Kirby's global styles once. The table uses Kirby's
@@ -81,7 +84,13 @@ This uses the experimental packages from
 [kirbydesign/designsystem#4898](https://github.com/kirbydesign/designsystem/pull/4898),
 not the separate `kirby-data-grid` component. The draft's actual selector is
 `kirby-data-grid-composable`. It does not provide pagination or virtualization;
-the POC still renders every generated row. Its optional side panel is unused.
+the POC still renders every generated row.
+Click a payment row or focus it and press Enter or Space to open Kirby's
+composed side panel with its existing payment details. Close with the button
+or Escape; focus returns to the selected row. Regenerating data closes stale
+details. The panel remains non-modal, so sorting is available while it is open.
+Kirby's native layout places the panel beside the table on desktop and below
+it on screens up to 960px; opening details moves focus to the panel heading.
 The independent Table Playground keeps its existing renderer and controls.
 
 The dev designsystem requires Ionic Angular **9.0.2** exactly.
