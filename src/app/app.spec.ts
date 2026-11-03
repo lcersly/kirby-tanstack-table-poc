@@ -87,7 +87,7 @@ describe('Playspace navigation', () => {
     expect(root.querySelector('main')?.children).toHaveLength(1);
     expect(root.querySelector('table')).toBeNull();
     expect(root.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(
-      'Table Playground',
+      "Lab's Lab",
     );
     expect(document.title).toBe('Table Playground');
     expect(document.activeElement).toBe(root.querySelector('#playspace-content'));
