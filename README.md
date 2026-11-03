@@ -73,6 +73,9 @@ Danish formatting, A/B/C layouts and row-count generator remain unchanged.
 Sorting is disabled to preserve the original read-only behavior.
 The projected table is keyboard-focusable so its horizontally scrolling content
 remains accessible on narrow screens.
+`src/styles.scss` imports Kirby's global styles once. The table uses Kirby's
+header, cell and row styling without the temporary renderer's uppercase headers,
+backgrounds or zebra stripes.
 
 This uses the experimental packages from
 [kirbydesign/designsystem#4898](https://github.com/kirbydesign/designsystem/pull/4898),
