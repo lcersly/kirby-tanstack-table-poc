@@ -5,9 +5,45 @@
   background: #fff;
 }
 
-table:focus-visible {
+table:focus-visible,
+.payment-row:focus-visible {
   outline: 2px solid #172a3a;
   outline-offset: -2px;
+}
+
+.payment-row {
+  cursor: pointer;
+}
+
+.payment-row:hover,
+.payment-row-selected {
+  background: var(--kirby-light);
+}
+
+.payment-details {
+  padding: var(--kirby-spacing-s);
+}
+
+.payment-details-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kirby-spacing-xs);
+}
+
+.payment-details-list {
+  display: grid;
+  gap: var(--kirby-spacing-xxs);
+}
+
+.payment-details-list dt {
+  font-weight: var(--kirby-font-weight-bold);
+}
+
+.payment-details-list dd {
+  margin: 0 0 var(--kirby-spacing-xs);
+  overflow-wrap: anywhere;
 }
 
 th,

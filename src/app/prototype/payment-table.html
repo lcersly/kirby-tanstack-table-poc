@@ -20,12 +20,53 @@
     </thead>
     <tbody>
       @for (row of grid.table.getRowModel().rows; track row.id) {
-        <tr>
-          @for (cell of row.getVisibleCells(); track cell.id) {
-            <td kirby-data-grid-cell [cellContext]="cell.getContext()"></td>
-          }
-        </tr>
+        @if (selectedPayment(row.original); as payment) {
+          <tr
+            class="payment-row"
+            tabindex="0"
+            [class.payment-row-selected]="
+              grid.sidePanelOpen() && grid.sidePanelContext() === row.original
+            "
+            [attr.aria-label]="'Vis detaljer for betaling til ' + payment.recipient"
+            (click)="openPayment(payment, $event)"
+            (keydown)="onRowKeydown(payment, $event)"
+          >
+            @for (cell of row.getVisibleCells(); track cell.id) {
+              <td kirby-data-grid-cell [cellContext]="cell.getContext()"></td>
+            }
+          </tr>
+        }
       }
     </tbody>
   </table>
+  <aside
+    kirbyDataGridSidePanel
+    class="payment-details"
+    tabindex="-1"
+    aria-labelledby="payment-details-heading"
+    (keydown.escape)="closeDetails(); $event.stopPropagation()"
+  >
+    @if (selectedPayment(grid.sidePanelContext()); as payment) {
+      <div class="payment-details-header">
+        <h2 id="payment-details-heading" #detailsHeading tabindex="-1">Betalingsdetaljer</h2>
+        <button kirby-button size="sm" attentionLevel="3" type="button" (click)="closeDetails()">
+          Luk detaljer
+        </button>
+      </div>
+      <dl class="payment-details-list">
+        <dt>Modtager</dt>
+        <dd>{{ payment.recipient }}</dd>
+        <dt>Dato</dt>
+        <dd>{{ payment.date }}</dd>
+        <dt>Beløb</dt>
+        <dd>{{ payment.amount }} {{ payment.currency }}</dd>
+        <dt>Betalingstype</dt>
+        <dd>{{ payment.paymentType }}</dd>
+        <dt>Modtagerkonto</dt>
+        <dd>{{ payment.destinationAccount }}</dd>
+        <dt>Status</dt>
+        <dd>{{ payment.status }}</dd>
+      </dl>
+    }
+  </aside>
 </kirby-data-grid-composable>

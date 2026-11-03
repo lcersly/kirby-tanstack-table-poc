@@ -13,6 +13,8 @@ describe('createSyntheticPayments', () => {
 
   it('uses the fixed reference date and expected payment fields', () => {
     expect(createSyntheticPayments(1)[0]).toEqual({
+      dateTimestamp: Date.UTC(2026, 6, 27),
+      amountInOre: 1_425_562,
       date: '27. jul. 2026',
       recipient: 'Kystens Gartneri',
       amount: '14.255,62',

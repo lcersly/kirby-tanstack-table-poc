@@ -1,4 +1,6 @@
 export interface PaymentRecord {
+  readonly dateTimestamp: number;
+  readonly amountInOre: number;
   readonly date: string;
   readonly recipient: string;
   readonly amount: string;
@@ -10,13 +12,13 @@ export interface PaymentRecord {
 
 const referenceDate = Date.UTC(2026, 9, 27);
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
-const dateFormatter = new Intl.DateTimeFormat('da-DK', {
+export const dateFormatter = new Intl.DateTimeFormat('da-DK', {
   day: '2-digit',
   month: 'short',
   year: 'numeric',
   timeZone: 'UTC',
 });
-const amountFormatter = new Intl.NumberFormat('da-DK', {
+export const amountFormatter = new Intl.NumberFormat('da-DK', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
@@ -59,6 +61,8 @@ export function createSyntheticPayments(count: number): PaymentRecord[] {
     const accountNumber = 10_000_000 + Math.floor(next() * 90_000_000);
 
     return {
+      dateTimestamp: paymentDate.getTime(),
+      amountInOre,
       date: dateFormatter.format(paymentDate),
       recipient: recipients[Math.floor(next() * recipients.length)],
       amount: amountFormatter.format(amountInOre / 100),
