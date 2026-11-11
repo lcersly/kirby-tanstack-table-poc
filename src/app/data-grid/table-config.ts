@@ -299,7 +299,8 @@ export class TableConfigService {
     // Udviklerens valg skal slå igennem, også selvom brugeren allerede har valgt noget
     if (key === 'density' || key === 'zebra' || key === 'columnDividers' || key === 'columnOverflow') {
       this.overrides.update((o) => {
-        const { [key]: _removed, ...rest } = o;
+        const rest = { ...o };
+        delete rest[key as keyof typeof rest];
         return rest;
       });
     }

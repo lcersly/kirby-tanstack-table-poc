@@ -885,7 +885,6 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     const table = root.querySelector('table');
     if (!th || !table) return;
     const h = root.getBoundingClientRect();
-    const t = th.getBoundingClientRect();
     const bottom = Math.min(table.getBoundingClientRect().bottom, window.innerHeight);
     const dropKey = this.dropKey();
     const over = dropKey ? root.querySelector<HTMLElement>(`thead th[data-col="${dropKey}"]`) : null;
