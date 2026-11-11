@@ -18,7 +18,7 @@ import { CHECK_COLORS, CHECK_ICONS, FlagColor, RecipientCheck } from './payments
       </kirby-flag>
     } @else {
       <span class="content">
-        <kirby-avatar size="xs" class="check-avatar" [class.dense]="avatarSize !== 'xs'" [class]="color()">
+        <kirby-avatar size="xs" class="check-avatar" [class.dense]="avatarSize !== 'xs'" [class.xxs]="avatarSize === 'xxs'" [class.md]="avatarSize === 'md'" [class]="color()">
           <kirby-icon [name]="icon()"></kirby-icon>
         </kirby-avatar>
         {{ check }}
@@ -51,12 +51,25 @@ import { CHECK_COLORS, CHECK_ICONS, FlagColor, RecipientCheck } from './payments
         --kirby-avatar-background-color: var(--kirby-danger-tint);
       }
     }
-    // [OPEN POINT: Kirby har ingen xxs-avatar; i kompakt og standard er avataren lige så høj som et xs-flag (20 px), mens ikonet beholder Luftigs størrelse]
-    .check-avatar.dense ::ng-deep .avatar {
+    // [OPEN POINT: Kirby har ingen avatar på 20 og 24 px. Kompakt er 20 px, standard 24 px og luftigt 28 px, firkantet med 4 px afrunding]
+    .check-avatar.dense.xs ::ng-deep .avatar {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      overflow: hidden;
+      border-radius: 4px !important;
+      --kirby-icon-font-size: 16px;
+    }
+    .check-avatar.dense.xs.md ::ng-deep .avatar {
+      width: 28px;
+      height: 28px;
+      --kirby-icon-font-size: 18px;
+    }
+    .check-avatar.dense.xs.xxs ::ng-deep .avatar {
       width: 20px;
       height: 20px;
-      padding: 0;
-      overflow: visible;
+      border-radius: 4px !important;
+      --kirby-icon-font-size: 14px;
     }
   `,
 })
@@ -70,8 +83,8 @@ export class RecipientCheckComponent {
     return this.value();
   }
   @Input() asFlag = true;
-  @Input() flagSize: 'xs' | 'sm' = 'xs';
-  @Input() avatarSize: 'xs' | 'sm' | 'xxs' = 'xs';
+  @Input() flagSize: 'xs' | 'sm' | 'md' = 'xs';
+  @Input() avatarSize: 'xs' | 'sm' | 'xxs' | 'md' = 'xs';
 
   readonly color = computed<FlagColor>(() => CHECK_COLORS[this.value()]);
   readonly icon = computed(() => CHECK_ICONS[this.value()]);

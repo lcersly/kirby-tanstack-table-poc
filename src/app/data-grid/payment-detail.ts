@@ -91,8 +91,10 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
 
       <section class="group">
         <div class="group-card approvers">
-          <span>Mulige godkendere</span>
-          <kirby-flag size="xs" themeColor="semi-light">{{ details().approverCount }}</kirby-flag>
+          <kirby-item [selectable]="true" disclosure="arrow-more">
+            <div class="kirby-text-normal">Mulige godkendere</div>
+            <kirby-flag slot="end" size="xs" themeColor="semi-light">{{ details().approverCount }}</kirby-flag>
+          </kirby-item>
         </div>
       </section>
 
@@ -110,7 +112,7 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
       </section>
 
       <section class="group">
-        <kirby-section-header><h3 heading>Modtager</h3></kirby-section-header>
+        <kirby-section-header><h4 heading>Modtager</h4></kirby-section-header>
         <dl class="group-card">
           @for (row of details().receiver; track row.label) {
             <dt>{{ row.label }}</dt>
@@ -120,7 +122,7 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
       </section>
 
       <section class="group">
-        <kirby-section-header><h3 heading>Afsender</h3></kirby-section-header>
+        <kirby-section-header><h4 heading>Afsender</h4></kirby-section-header>
         <dl class="group-card">
           @for (row of details().sender; track row.label) {
             <dt>{{ row.label }}</dt>
@@ -130,7 +132,7 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
       </section>
 
       <section class="group">
-        <kirby-section-header><h3 heading>Betaling</h3></kirby-section-header>
+        <kirby-section-header><h4 heading>Betaling</h4></kirby-section-header>
         <dl class="group-card">
           @for (row of details().payment; track row.label) {
             <dt>{{ row.label }}</dt>
@@ -140,7 +142,7 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
       </section>
 
       <section class="group">
-        <kirby-section-header><h3 heading>Aktiviteter</h3></kirby-section-header>
+        <kirby-section-header><h4 heading>Aktiviteter</h4></kirby-section-header>
         <ul class="group-card activities">
           @for (a of details().activities; track a.title) {
             <li>
@@ -193,7 +195,6 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
 
       kirby-section-header {
         margin-bottom: 0;
-        --kirby-section-header-color: var(--kirby-text-color-black);
       }
     }
     .group-card {
@@ -205,10 +206,11 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
       box-sizing: border-box;
     }
     .approvers {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-
+      padding: 0;
+      kirby-item {
+        --kirby-item-background: transparent;
+      }
+      overflow: hidden;
     }
     .match {
       padding: 0;
@@ -259,6 +261,14 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
     .status-detail {
       font-size: var(--kirby-font-size-xs);
       color: var(--kirby-text-color-semi-dark);
+    }
+    // Knappen har kortets modsatte flade: grå på hvidt kort, hvid på lysegråt kort
+    .match-body button[kirby-button] {
+      --kirby-button-background-color: var(--kirby-semi-light);
+      --kirby-button-color: var(--kirby-black);
+    }
+    :host(.variant-card:not(.modal)) .match-body button[kirby-button] {
+      --kirby-button-background-color: var(--kirby-white);
     }
     .match-text {
       flex: 1;

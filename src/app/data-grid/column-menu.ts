@@ -18,7 +18,7 @@ import { IconComponent } from '@kirbydesign/designsystem/icon';
 import { ToBodyDirective } from './to-body';
 import { ButtonComponent } from '@kirbydesign/designsystem/button';
 import { AffixDirective, FormFieldComponent, InputComponent } from '@kirbydesign/designsystem/form-field';
-import { ColumnFilter, NumberFilter, NumberOp } from './payments-table';
+import { ColumnFilter, DATE_PRESETS, DateFilter, DatePreset, NumberFilter, NumberOp } from './payments-table';
 import { animateReorder, itemAtPointer } from './reorder-motion';
 import { SfIconComponent } from './sf-icon';
 import { COLUMNS, ColumnDef, ColumnKey, TableConfigService } from './table-config';
@@ -37,7 +37,6 @@ const VALUES_PER_PAGE = 6;
       size="xs"
       attentionLevel="3"
       class="trigger"
-      [class.active]="filtered()"
       [attr.aria-label]="'Menu for kolonnen ' + column().label"
       aria-haspopup="menu"
       [attr.aria-expanded]="open()"
@@ -99,6 +98,50 @@ const VALUES_PER_PAGE = 6;
                       </kirby-form-field>
                     }
                   </div>
+                } @else if (column().filter === 'date') {
+                  <div class="numfilter datefilter">
+                    <kirby-dropdown
+                      size="md"
+                      placeholder="Vælg periode"
+                      [attr.aria-label]="'Filtrér ' + column().label"
+                      [items]="datePresetLabels"
+                      [selectedIndex]="datePresetIndex()"
+                      (change)="setDatePreset($event)"
+                    ></kirby-dropdown>
+                    @if (datePreset() === 'custom') {
+                      <div class="date-range">
+                      <kirby-form-field>
+                        <input
+                          kirby-input
+                          type="date"
+                          size="md"
+                          [useNativeDatePicker]="true"
+                          aria-label="Fra dato"
+                          [max]="dateTo()"
+                          [value]="dateFrom()"
+                          (input)="setDateFrom($any($event.target).value)"
+                          (keydown)="$event.stopPropagation()"
+                        />
+                        <kirby-icon kirby-affix="suffix" name="calendar-start"></kirby-icon>
+                      </kirby-form-field>
+                      <kirby-form-field>
+                        <input
+                          kirby-input
+                          type="date"
+                          size="md"
+                          [useNativeDatePicker]="true"
+                          aria-label="Til dato"
+                          [min]="dateFrom()"
+                          [value]="dateTo()"
+                          (input)="setDateTo($any($event.target).value)"
+                          (keydown)="$event.stopPropagation()"
+                        />
+                        <kirby-icon kirby-affix="suffix" name="calendar-end"></kirby-icon>
+                      </kirby-form-field>
+                      </div>
+                    }
+                  </div>
+                  <div class="menu-divider"></div>
                 } @else {
                   <kirby-form-field class="search">
                     <input
@@ -120,7 +163,7 @@ const VALUES_PER_PAGE = 6;
                     </kirby-item>
                   }
                 }
-                @if (column().filter !== 'text' && column().filter !== 'number') {
+                @if (column().filter !== 'text' && column().filter !== 'number' && column().filter !== 'date') {
                   <kirby-item [selectable]="true" disclosure="arrow-more" role="menuitem" (click)="go('values')">
                     <app-sf-icon slot="start" name="filter" [size]="24"></app-sf-icon>
                     Filtrér
@@ -242,9 +285,7 @@ const VALUES_PER_PAGE = 6;
   styles: `
     :host {
       display: inline-flex;
-    }
-    .trigger.active {
-      color: var(--kirby-primary);
+      position: relative;
     }
     .trigger:hover,
     .trigger[aria-expanded='true'] {
@@ -322,6 +363,24 @@ const VALUES_PER_PAGE = 6;
       flex-direction: column;
       gap: var(--kirby-spacing-xxs);
       margin: var(--kirby-spacing-xs);
+    }
+    .datefilter {
+      gap: 0;
+    }
+    .date-range {
+      display: flex;
+      flex-direction: column;
+      gap: var(--kirby-spacing-m);
+      margin-top: var(--kirby-spacing-m);
+      margin-bottom: calc(var(--kirby-spacing-m) - var(--kirby-spacing-xs));
+    }
+    .date-range kirby-form-field {
+      margin: 0;
+    }
+    .menu-divider {
+      height: 1px;
+      margin: 0;
+      background-color: var(--kirby-semi-light);
     }
     .search {
       display: block;
@@ -454,6 +513,33 @@ export class ColumnMenuComponent {
     const b = this.parse(this.numB());
     this.numberChange.emit(a === null && b === null ? null : { op: this.numOp(), a, b });
   }
+  protected readonly datePresetLabels = DATE_PRESETS.map((p) => p.label);
+  protected readonly datePreset = signal<DatePreset | null>(null);
+  protected readonly dateFrom = signal('');
+  protected readonly dateTo = signal('');
+  protected readonly datePresetIndex = computed(() => DATE_PRESETS.findIndex((p) => p.id === this.datePreset()));
+
+  protected setDatePreset(label: string) {
+    this.datePreset.set(DATE_PRESETS.find((p) => p.label === label)?.id ?? null);
+    this.emitDate();
+  }
+  protected setDateFrom(v: string) {
+    this.dateFrom.set(v);
+    this.emitDate();
+  }
+  protected setDateTo(v: string) {
+    this.dateTo.set(v);
+    this.emitDate();
+  }
+  private emitDate() {
+    const preset = this.datePreset();
+    if (!preset) return this.dateChange.emit(null);
+    if (preset !== 'custom') return this.dateChange.emit({ preset, from: null, to: null });
+    const from = this.dateFrom() || null;
+    const to = this.dateTo() || null;
+    this.dateChange.emit(from || to ? { preset, from, to } : { preset, from: null, to: null });
+  }
+
   readonly filter = input<ColumnFilter | undefined>();
   readonly values = input<{ value: string; count: number }[]>([]);
   readonly sortDirection = input<'asc' | 'desc' | null>(null);
@@ -467,11 +553,15 @@ export class ColumnMenuComponent {
   readonly textChange = output<string>();
   readonly valuesChange = output<string[] | null>();
   readonly numberChange = output<NumberFilter | null>();
+  readonly dateChange = output<DateFilter | null>();
   readonly sort = output<'asc' | 'desc'>();
   readonly freeze = output<'left' | 'right' | null>();
   readonly fit = output<void>();
   readonly fitAll = output<void>();
   readonly resetColumns = output<void>();
+
+  // Kun én kolonnemenu må være åben ad gangen
+  private static current: ColumnMenuComponent | null = null;
 
   protected readonly open = signal(false);
   protected readonly view = signal<View>('main');
@@ -493,7 +583,6 @@ export class ColumnMenuComponent {
       .slice(0, 5);
   });
 
-  protected readonly filtered = computed(() => !!this.filter());
   protected readonly pageCount = computed(() => Math.max(1, Math.ceil(this.values().length / VALUES_PER_PAGE)));
   protected readonly pageValues = computed(() =>
     this.values().slice(this.page() * VALUES_PER_PAGE, (this.page() + 1) * VALUES_PER_PAGE),
@@ -502,6 +591,8 @@ export class ColumnMenuComponent {
   protected toggle(e: Event) {
     e.stopPropagation();
     if (this.open()) return this.close();
+    if (ColumnMenuComponent.current && ColumnMenuComponent.current !== this) ColumnMenuComponent.current.close();
+    ColumnMenuComponent.current = this;
     const rect = this.host.nativeElement.getBoundingClientRect();
     const width = 240;
     this.pos.set({
@@ -512,6 +603,10 @@ export class ColumnMenuComponent {
     this.numOp.set(num?.op ?? 'gt');
     this.numA.set(num?.a == null ? '' : String(num.a));
     this.numB.set(num?.b == null ? '' : String(num.b));
+    const date = this.filter()?.date;
+    this.datePreset.set(date?.preset ?? null);
+    this.dateFrom.set(date?.from ?? '');
+    this.dateTo.set(date?.to ?? '');
     this.view.set('main');
     this.dir.set('fwd');
     this.page.set(0);
@@ -527,6 +622,7 @@ export class ColumnMenuComponent {
 
   protected close() {
     this.open.set(false);
+    if (ColumnMenuComponent.current === this) ColumnMenuComponent.current = null;
   }
 
   protected pickSort(direction: 'asc' | 'desc') {
@@ -567,11 +663,12 @@ export class ColumnMenuComponent {
     this.valuesChange.emit(next.length === all.length ? null : next);
   }
 
-  @HostListener('document:click', ['$event'])
-  protected onDocumentClick(e: MouseEvent) {
+  // pointerdown frem for click, da mange elementer stopper click, før det når dokumentet
+  @HostListener('document:pointerdown', ['$event'])
+  protected onDocumentClick(e: Event) {
     if (!this.open()) return;
     const target = e.target as Node;
-    if (this.host.nativeElement.contains(target)) return;
+    if (this.host.nativeElement.contains(target) || this.panelEl()?.nativeElement.contains(target)) return;
     // Valgene i en dropdown i menuen ligger i en popover uden for menuen
     if ((target as Element).closest?.('[role=listbox], .menu-popover')) return;
     this.close();

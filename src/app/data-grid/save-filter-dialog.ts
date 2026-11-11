@@ -10,7 +10,7 @@ import { COMPONENT_PROPS, ModalController } from '@kirbydesign/designsystem/moda
   imports: [EmptyStateComponent, ButtonComponent, FormFieldComponent, InputComponent],
   template: `
     <article>
-      <kirby-empty-state title="Gem filter" subtitle="Bekræft navnet på filteret. Det vises sammen med hurtigfiltrene."></kirby-empty-state>
+      <kirby-empty-state title="Vælg et navn til dit filter"></kirby-empty-state>
       <kirby-form-field>
         <input
           kirby-input
@@ -30,14 +30,13 @@ import { COMPONENT_PROPS, ModalController } from '@kirbydesign/designsystem/moda
       </div>
     </article>
   `,
-  // Layout som Kirbys Alert: samme afstande og knapper, der deler bredden 50/50
+  // Layout som Kirbys Alert (Figma): 16 px til siderne og bunden, 4 px mellem knapperne
   styles: `
     article {
       display: flex;
       flex-direction: column;
       gap: var(--kirby-spacing-s);
-      padding: var(--kirby-spacing-s);
-      padding-top: var(--kirby-spacing-m);
+      padding: var(--kirby-spacing-m) var(--kirby-spacing-s) var(--kirby-spacing-s);
     }
     kirby-form-field {
       margin: 0;
@@ -49,7 +48,7 @@ import { COMPONENT_PROPS, ModalController } from '@kirbydesign/designsystem/moda
     .buttongroup button {
       flex: 1 1 0;
       min-width: 0;
-      margin-inline: 0;
+      margin: 0;
     }
   `,
 })
