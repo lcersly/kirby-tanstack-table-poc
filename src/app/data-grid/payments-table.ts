@@ -54,7 +54,7 @@ import { COLUMNS, ColumnDef, ColumnKey, TableConfigService, defaultDirection } f
 const SMALL_SCREEN_MAX = 768;
 const SELECT_WIDTH = 56;
 // [OPEN POINT: "I dag" er fast i prototypen, så der er både kommende og tidligere betalinger]
-const MOCK_TODAY = '2026-10-14';
+export const MOCK_TODAY = '2026-10-14';
 export const QUICK_FILTERS = [
   { id: 'upcoming', label: 'Kommende', test: (p: Payment) => p.date > MOCK_TODAY },
   { id: 'missing', label: 'Mangler godkendelse', test: (p: Payment) => p.status.startsWith('Mangler') },
@@ -80,10 +80,52 @@ export interface NumberFilter {
   b: number | null;
 }
 
+export type DatePreset = 'upcoming' | '7' | '30' | '365' | 'custom';
+
+export interface DateFilter {
+  preset: DatePreset;
+  /** Kun for selvvalgt periode: ISO-datoer (åååå-mm-dd) */
+  from: string | null;
+  to: string | null;
+}
+
 export interface ColumnFilter {
   text: string;
   values: string[] | null;
   num?: NumberFilter | null;
+  date?: DateFilter | null;
+}
+
+export const DATE_PRESETS: { id: DatePreset; label: string }[] = [
+  { id: 'upcoming', label: 'Kommende' },
+  { id: '7', label: 'Sidste 7 dage' },
+  { id: '30', label: 'Sidste 30 dage' },
+  { id: '365', label: 'Sidste 365 dage' },
+  { id: 'custom', label: 'Selvvalgt periode' },
+];
+
+/** Et selvvalgt datointerval gælder først, når mindst én dato er valgt */
+export function dateFilterActive(d: DateFilter | null | undefined): d is DateFilter {
+  return !!d && (d.preset !== 'custom' || !!d.from || !!d.to);
+}
+
+function isoDaysBefore(iso: string, days: number): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function dateMatches(iso: string, d: DateFilter): boolean {
+  if (d.preset === 'upcoming') return iso > MOCK_TODAY;
+  if (d.preset === 'custom') return (!d.from || iso >= d.from) && (!d.to || iso <= d.to);
+  return iso <= MOCK_TODAY && iso >= isoDaysBefore(MOCK_TODAY, Number(d.preset));
+}
+
+export function dateFilterLabel(d: DateFilter): string {
+  if (d.preset !== 'custom') return DATE_PRESETS.find((p) => p.id === d.preset)!.label;
+  const f = (iso: string) => iso.split('-').reverse().join('.');
+  if (d.from && d.to) return `${f(d.from)} – ${f(d.to)}`;
+  return d.from ? `Fra ${f(d.from)}` : `Til ${f(d.to!)}`;
 }
 
 /** Et talfilter gælder først, når alle de tal, det kræver, er udfyldt */
@@ -211,11 +253,16 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   );
   // Når kolonner skjules ved pladsmangel (eller inline-panelet er åbent), må tabellen aldrig rulle sidelæns
   readonly fitColumns = computed(() => this.cfg().columnOverflow === 'hide' || this.inlineOpen());
-  readonly flagSize = computed(() => (this.cfg().density === 'spacious' ? 'sm' : 'xs') as 'sm' | 'xs');
+  readonly flagSize = computed(() => ({ compact: 'xs', standard: 'sm', spacious: 'md' } as const)[this.cfg().density]);
 
   private effWidth(c: ColumnDef): number {
-    return this.widthOf(c) ?? c.width;
+    // Kolonner med menu kan ikke blive smallere end deres indhold, så det bruges som gulv, når pladsen regnes ud
+    const floor = this.hasColumnMenu() ? (c.key === 'attachments' ? 90 : 128) : 0;
+    return Math.max(this.widthOf(c) ?? c.width, floor);
   }
+
+  /** Kolonnen, brugeren sidst trykkede i. Den skjules så sent som muligt, når detaljerne tager plads */
+  readonly focusCol = signal<ColumnKey | null>(null);
 
   readonly columns = computed<ColumnDef[]>(() => {
     const order = this.cfg().visibleColumns;
@@ -225,18 +272,28 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     // Inline-panelet skubber tabellen og skjuler de mindst vigtige kolonner
     const hide = this.cfg().columnOverflow === 'hide' || this.inlineOpen();
     if (!hide) return chosen;
-    const fixed = this.selectWidth() + this.actionsWidth() + FIT_MARGIN;
+    const fixed = this.selectWidth() + Math.max(this.actionsWidth(), 64) + FIT_MARGIN;
     let available = this.width() - (this.inlineOpen() ? INLINE_PANEL_WIDTH : 0) - fixed;
     const keep = new Set<ColumnKey>();
     for (const c of chosen.filter((c) => c.noHide)) {
       keep.add(c.key);
       available -= this.effWidth(c);
     }
-    for (const c of [...chosen].sort((a, b) => a.priority - b.priority)) {
-      if (!keep.has(c.key) && this.effWidth(c) <= available) {
-        keep.add(c.key);
-        available -= this.effWidth(c);
-      }
+    // Prioritet: Dato, de to sidste kolonner (bilag og beløb), den kolonne brugeren trykkede i, fastgjorte kolonner,
+    // derefter fra venstre mod højre. Markering og handlinger er faste og trækkes allerede fra pladsen.
+    const frozen = this.frozen();
+    const head = [
+      chosen[0],
+      ...chosen.slice(-2).reverse(),
+      chosen.find((c) => c.key === this.focusCol()),
+      ...chosen.filter((c) => frozen[c.key]),
+    ].filter((c): c is ColumnDef => !!c);
+    const ranked = [...new Set([...head, ...chosen])];
+    for (const c of ranked) {
+      if (keep.has(c.key)) continue;
+      if (this.effWidth(c) > available) break;
+      keep.add(c.key);
+      available -= this.effWidth(c);
     }
     return chosen.filter((c) => keep.has(c.key));
   });
@@ -269,11 +326,11 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   });
   readonly showToolbar = computed(() => {
     const c = this.cfg();
-    return c.featureQuick || c.featureSearch || c.featureSettings || this.activeFilters().length > 0 || this.savedFilters().length > 0;
+    return c.featureQuick || c.featureSearch || c.featureSettings || c.featureShare || this.activeFilters().length > 0 || this.savedFilters().length > 0;
   });
 
   readonly checkboxSize = computed(() => (this.cfg().density === 'spacious' ? 'md' : this.cfg().checkboxSize));
-  readonly checkAvatarSize = computed(() => ({ compact: 'xxs', standard: 'sm', spacious: 'xs' } as const)[this.cfg().density]);
+  readonly checkAvatarSize = computed(() => ({ compact: 'xxs', standard: 'sm', spacious: 'md' } as const)[this.cfg().density]);
   readonly avatarSize = computed(() => (this.cfg().density === 'compact' ? 'xxs' : 'xs'));
 
   readonly rows = computed(() => {
@@ -315,6 +372,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
       if (f.values && !f.values.includes(value)) return false;
       const raw = p[col.key as keyof Payment];
       if (numberFilterActive(f.num) && typeof raw === 'number' && !numberMatches(raw, f.num)) return false;
+      if (dateFilterActive(f.date) && typeof raw === 'string' && !dateMatches(raw, f.date)) return false;
     }
     return true;
   }
@@ -326,7 +384,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     for (const col of COLUMNS) {
       const counts = new Map<string, number>();
       // Tal varierer for meget til at kunne vælges enkeltvis
-      if (col.filter === 'number') {
+      if (col.filter === 'number' || col.filter === 'date') {
         result[col.key] = [];
         continue;
       }
@@ -342,14 +400,25 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     return result;
   });
 
-  readonly pinLeft = computed(() => Object.values(this.frozen()).includes('left'));
+  /** Ved rulning ligger Dato og de to sidste kolonner fast sammen med markering og handlinger, plus fastgjorte kolonner */
+  private readonly effFrozen = computed(() => {
+    const cols = this.columns();
+    const pin = this.pinnedCfg();
+    const implicit: Partial<Record<ColumnKey, 'left' | 'right'>> = {};
+    // Når kolonnerne tilpasser sig pladsen, er der ingen sidelæns rulning og dermed intet at fastlåse
+    if (this.fitColumns()) return implicit;
+    if (pin !== 'none' && cols.length) implicit[cols[0].key] = 'left';
+    if (pin === 'both' && cols.length > 2) cols.slice(-2).forEach((c) => (implicit[c.key] = 'right'));
+    return { ...implicit, ...this.frozen() };
+  });
+  readonly pinLeft = computed(() => !this.fitColumns() && (this.pinnedCfg() !== 'none' || Object.values(this.frozen()).includes('left')));
   readonly pinRight = computed(
-    () => this.pinnedCfg() === 'both' || Object.values(this.frozen()).includes('right'),
+    () => !this.fitColumns() && (this.pinnedCfg() === 'both' || Object.values(this.frozen()).includes('right')),
   );
 
   /** Sticky-placering for fastlåste kolonner, ud fra de målte kolonnebredder */
   readonly frozenInfo = computed(() => {
-    const f = this.frozen();
+    const f = this.effFrozen();
     const w = this.colWidths();
     const cols = this.columns();
     const info: Partial<Record<ColumnKey, { side: 'left' | 'right'; offset: number; edge: boolean }>> = {};
@@ -382,16 +451,16 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
       badge: { content: String(count), themeColor, description: `${count} betalinger` },
     });
     return [
-      item('all', 'Alle', base.length, 'medium'),
       ...QUICK_FILTERS.map((q) =>
         item(q.id, q.label, base.filter((p) => q.test(p)).length, q.id === 'rejected' || q.id === 'error' ? 'warning' : 'medium'),
       ),
+      item('all', 'Alle', base.length, 'medium'),
     ];
   });
   readonly quickIndex = computed(() => {
     if (this.activeSavedId() !== null) return -1;
     const id = [...this.quick()][0];
-    return id ? this.quickItems().findIndex((q) => q.id === id) : 0;
+    return this.quickItems().findIndex((q) => q.id === (id ?? 'all'));
   });
 
   setQuick(index: number) {
@@ -483,12 +552,18 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     this.filters.update((f) => this.withFilter(f, key, { text: '', values: null, ...f[key], num }));
   }
 
+  setDateFilter(key: ColumnKey, date: DateFilter | null) {
+    this.snapshotRows();
+    this.filters.update((f) => this.withFilter(f, key, { text: '', values: null, ...f[key], date }));
+  }
+
   // Ét valg pr. kolonne: antal valgte filtre og en tekst til chippen
   readonly activeFilters = computed(() =>
     COLUMNS.flatMap((col) => {
       const f = this.filters()[col.key];
       if (!f) return [];
       if (numberFilterActive(f.num)) return [{ key: col.key, count: 1, label: `${col.label}: ${numberFilterLabel(f.num)}` }];
+      if (dateFilterActive(f.date)) return [{ key: col.key, count: 1, label: `${col.label}: ${dateFilterLabel(f.date)}` }];
       const parts = [...(f.text ? [`"${f.text}"`] : []), ...(f.values ?? [])];
       if (f.values && !f.values.length) return [{ key: col.key, count: 1, label: `${col.label}: ingen valgt` }];
       if (!parts.length) return [];
@@ -513,6 +588,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   // Antal gemte filtre, der er plads til ved siden af hurtigfiltrene. Resten samles i en dropdown
   private readonly visibleSavedCount = computed(() => {
     const saved = this.savedFilters();
+    if (saved.length === 1) return 1;
     let budget = this.width() - (this.inlineOpen() ? INLINE_PANEL_WIDTH : 0) - 32 - 380 - 620;
     let count = 0;
     for (const s of saved) {
@@ -547,12 +623,23 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     if (!col) return '';
     const f = this.filters()[col.key];
     if (f && numberFilterActive(f.num)) return numberFilterLabel(f.num);
+    if (f && dateFilterActive(f.date)) return dateFilterLabel(f.date);
     const parts = [...(f?.text ? [f.text] : []), ...(f?.values ?? [])];
     return parts.length === 1 ? parts[0] : `${parts.length} ${col.plural}`;
   }
 
   removeSaved(id: number) {
-    this.savedFilters.update((list) => list.filter((s) => s.id !== id));
+    this.modalController.showAlert(
+      {
+        title: 'Slet filter',
+        message: 'Ønsker du at slette dit gemte filter?',
+        cancelBtn: 'Annuller',
+        okBtn: { text: 'Slet', isDestructive: true },
+      },
+      (ok) => {
+        if (ok) this.savedFilters.update((list) => list.filter((s) => s.id !== id));
+      },
+    );
   }
 
   saveCurrentFilter() {
@@ -626,7 +713,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     next: ColumnFilter,
   ): Partial<Record<ColumnKey, ColumnFilter>> {
     const copy = { ...all };
-    if (!next.text && !next.values && !numberFilterActive(next.num)) delete copy[key];
+    if (!next.text && !next.values && !numberFilterActive(next.num) && !dateFilterActive(next.date)) delete copy[key];
     else copy[key] = next;
     return copy;
   }
@@ -638,12 +725,27 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   }
 
   setFrozen(key: ColumnKey, side: 'left' | 'right' | null) {
+    if (side) this.placeFrozen(key, side);
     this.frozen.update((f) => {
       const copy = { ...f };
       if (side) copy[key] = side;
       else delete copy[key];
       return copy;
     });
+  }
+
+  // Fastgjorte kolonner flytter ind ved kanten: efter de øvrige fastgjorte til venstre, før de øvrige fastgjorte til højre
+  private placeFrozen(key: ColumnKey, side: 'left' | 'right') {
+    const frozen = this.frozen();
+    const order = this.cfg().visibleColumns.filter((k) => k !== key);
+    const same = order.map((k, i) => ({ k, i })).filter((x) => frozen[x.k] === side);
+    // Dato ligger fast først til venstre, bilag og beløb til højre
+    const pin = this.pinnedCfg();
+    const leftBase = pin === 'none' ? 0 : 1;
+    const rightBase = pin === 'both' ? Math.max(order.length - 2, leftBase) : order.length;
+    const index = side === 'left' ? (same.length ? same[same.length - 1].i + 1 : leftBase) : same.length ? same[0].i : rightBase;
+    order.splice(index, 0, key);
+    this.configService.config.update((c) => ({ ...c, visibleColumns: order }));
   }
 
   resetColumns() {
@@ -653,7 +755,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   }
 
   private defaultFrozen(): Partial<Record<ColumnKey, 'left' | 'right'>> {
-    return this.pinnedCfg() === 'none' ? {} : { recipient: 'left' };
+    return {};
   }
 
   readonly loading = computed(() => this.cfg().loading);
@@ -689,10 +791,16 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   readonly shownFrom = computed(() => (this.rows().length ? this.rowOffset() + 1 : 0));
   readonly shownTo = computed(() => this.rowOffset() + this.displayRows().length);
 
-  readonly selectedPayments = computed(() => this.rows().filter((r) => this.selected().has(r.id)));
-  readonly allSelected = computed(
-    () => this.rows().length > 0 && this.selected().size === this.rows().length,
+  /** Rækkerne, som de vises: udfoldede samleposteringer efterfølges af deres enkeltposteringer */
+  readonly viewRows = computed(() =>
+    this.displayRows().flatMap((p) => (p.children && this.expanded().has(p.id) ? [p, ...p.children] : [p])),
   );
+  /** En markeret samlepostering tæller som én betaling, ellers tælles de markerede enkeltposteringer */
+  readonly selectedPayments = computed(() =>
+    this.rows().flatMap((r) => (this.selected().has(r.id) ? [r] : (r.children ?? []).filter((c) => this.selected().has(c.id)))),
+  );
+  private readonly allIds = computed(() => this.rows().flatMap((r) => [r.id, ...(r.children ?? []).map((c) => c.id)]));
+  readonly allSelected = computed(() => this.allIds().length > 0 && this.allIds().every((id) => this.selected().has(id)));
   readonly someSelected = computed(() => this.selected().size > 0 && !this.allSelected());
   readonly canApproveSelected = computed(() => this.selectedPayments().some(canApprove));
   readonly canStopSelected = computed(() => this.selectedPayments().some(canStop));
@@ -706,6 +814,10 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     effect(() => {
       this.pinnedCfg();
       untracked(() => this.frozen.set(this.defaultFrozen()));
+    });
+    // Egne kolonnefiltre afløser det aktive hurtigfilter
+    effect(() => {
+      if (this.activeFilters().length) untracked(() => this.quick.update((q) => (q.size ? new Set() : q)));
     });
     // Slås en funktion fra, nulstilles det, den har sat
     effect(() => {
@@ -746,7 +858,6 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     effect(() => {
       this.cfg();
       this.rows();
-      this.detailId();
       untracked(() => {
         this.cellSel.set(null);
         setTimeout(() => this.updateShadows());
@@ -765,7 +876,6 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   readonly dropKey = signal<ColumnKey | null>(null);
   readonly dropSide = signal<'before' | 'after'>('before');
   private justDragged = false;
-  readonly liftRect = signal<{ left: number; top: number; width: number; height: number } | null>(null);
   readonly dropLine = signal<{ left: number; top: number; height: number } | null>(null);
 
   // Rammer til skygge og indsætningslinje, så de dækker kolonnens fulde højde
@@ -775,10 +885,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     const table = root.querySelector('table');
     if (!th || !table) return;
     const h = root.getBoundingClientRect();
-    const t = th.getBoundingClientRect();
     const bottom = Math.min(table.getBoundingClientRect().bottom, window.innerHeight);
-    const grow = t.width * 0.02;
-    this.liftRect.set({ left: t.left - h.left - grow, top: t.top - h.top, width: t.width + grow * 2, height: Math.max(0, bottom - t.top) });
     const dropKey = this.dropKey();
     const over = dropKey ? root.querySelector<HTMLElement>(`thead th[data-col="${dropKey}"]`) : null;
     if (!over) {
@@ -793,6 +900,45 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     });
   }
 
+  private ghost: HTMLElement | null = null;
+
+  // Bygger et spøgelse af kolonnens synlige celler, som følger markøren
+  private createGhost(key: ColumnKey, pointerX: number) {
+    const root = this.host.nativeElement;
+    const cells = Array.from(root.querySelectorAll<HTMLElement>(`[data-col="${key}"], td.lifted, th.lifted`)).filter(
+      (c) => c.classList.contains('lifted') && c.getBoundingClientRect().bottom > 0 && c.getBoundingClientRect().top < window.innerHeight,
+    );
+    if (!cells.length) return;
+    const first = cells[0].getBoundingClientRect();
+    const g = document.createElement('div');
+    g.setAttribute('aria-hidden', 'true');
+    // Ligger direkte i body, så ingen forælder med transform flytter den; derfor inline typografi
+    g.style.cssText = `position:fixed;z-index:1000;pointer-events:none;overflow:hidden;opacity:.6;background:var(--kirby-white);border-radius:var(--kirby-border-radius-xs);box-shadow:0 12px 32px rgb(0 0 0 / 16%);max-height:${window.innerHeight - first.top - 8}px`;
+    for (const c of cells) {
+      const r = c.getBoundingClientRect();
+      const cell = document.createElement('div');
+      cell.style.cssText = `display:flex;align-items:center;box-sizing:border-box;padding:0 var(--kirby-spacing-s);border-bottom:1px solid var(--kirby-semi-light);white-space:nowrap;overflow:hidden;font-size:var(--kirby-font-size-s);font-family:inherit`;
+      cell.style.height = `${r.height}px`;
+      cell.style.justifyContent = c.classList.contains('num') || getComputedStyle(c).textAlign === 'right' ? 'flex-end' : 'flex-start';
+      cell.innerHTML = c.innerHTML;
+      g.appendChild(cell);
+    }
+    g.style.width = `${first.width}px`;
+    g.style.top = `${first.top}px`;
+    g.style.left = `${first.left}px`;
+    document.body.appendChild(g);
+    this.ghost = g;
+    this.ghostOffset = pointerX - first.left;
+  }
+  private ghostOffset = 0;
+  private moveGhost(x: number) {
+    if (this.ghost) this.ghost.style.left = `${x - this.ghostOffset}px`;
+  }
+  private removeGhost() {
+    this.ghost?.remove();
+    this.ghost = null;
+  }
+
   // Langt tryk på en kolonneoverskrift løfter kolonnen, så den kan flyttes
   startReorder(e: PointerEvent, col: ColumnDef) {
     const target = e.target as HTMLElement;
@@ -800,6 +946,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     const startX = e.clientX;
     const startY = e.clientY;
     let lifted = false;
+    let lastX = startX;
     const root = this.host.nativeElement;
     const ths = () => Array.from(root.querySelectorAll<HTMLElement>('thead th[data-col]'));
     const timer = setTimeout(() => {
@@ -807,8 +954,12 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
       this.dragKey.set(col.key);
       this.updateReorderGuides(col.key);
       document.body.style.cursor = 'grabbing';
+      // Kolonnens celler får klassen "lifted" efter næste visning
+      setTimeout(() => lifted && this.createGhost(col.key, lastX));
     }, 400);
     const move = (ev: PointerEvent) => {
+      lastX = ev.clientX;
+      this.moveGhost(ev.clientX);
       if (!lifted) {
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6) cleanup();
         return;
@@ -841,9 +992,9 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
       document.removeEventListener('pointerup', up);
       document.removeEventListener('pointercancel', cleanup);
       document.body.style.cursor = '';
+      this.removeGhost();
       this.dragKey.set(null);
       this.dropKey.set(null);
-      this.liftRect.set(null);
       this.dropLine.set(null);
     };
     const up = () => {
@@ -928,7 +1079,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     this.stuck.set(table.getBoundingClientRect().top < th.getBoundingClientRect().top - 0.5);
     // Når kolonnerne tilpasser sig pladsen, kan tabellen ikke rulle sidelæns, og så skal der ingen skygger være
     const canScroll = !this.fitColumns();
-    this.shadowLeft.set(canScroll && el.scrollLeft > 0.5);
+    this.shadowLeft.set(canScroll && el.scrollWidth > el.clientWidth + 1);
     this.shadowRight.set(canScroll && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
     const widths: Record<string, number> = {};
     el.querySelectorAll<HTMLElement>('thead th[data-col]').forEach((t) => {
@@ -943,13 +1094,14 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     }
   }
 
-  // Markering af celler: tryk og hold, og træk (kun når fremhævning er sat til Celle)
+  // Markering af celler: tryk og hold, og træk (kun når markering af celler er slået til)
   readonly cellSel = signal<{ r1: number; c1: number; r2: number; c2: number } | null>(null);
   private suppressClick = false;
   private pressTimer?: ReturnType<typeof setTimeout>;
   private dragging = false;
   private anchor?: { r: number; c: number };
   private pressPoint?: { x: number; y: number };
+  private pressIsMouse = true;
 
   private cellAt(target: EventTarget | null) {
     const td = (target as HTMLElement | null)?.closest?.<HTMLElement>('td[data-c]');
@@ -957,28 +1109,36 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   }
 
   cellPointerDown(e: PointerEvent) {
-    if (this.cfg().highlight !== 'cell' || e.button !== 0) return;
+    if (!this.cfg().cellSelection || e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('input')) return;
     const cell = this.cellAt(e.target);
     this.cellSel.set(null);
     if (!cell) return;
+    this.cellSel.set({ r1: cell.r, c1: cell.c, r2: cell.r, c2: cell.c });
     this.pressPoint = { x: e.clientX, y: e.clientY };
-    this.pressTimer = setTimeout(() => {
-      this.dragging = true;
-      this.anchor = cell;
-      this.cellSel.set({ r1: cell.r, c1: cell.c, r2: cell.r, c2: cell.c });
-      window.getSelection()?.removeAllRanges();
-    }, 350);
+    this.anchor = cell;
+    this.pressIsMouse = e.pointerType === 'mouse';
+    // Med mus starter markeringen, så snart man trækker. På touch skal man holde fingeren nede først, ellers ruller siden
+    if (!this.pressIsMouse) this.pressTimer = setTimeout(() => this.beginCellDrag(), 350);
     document.addEventListener('pointermove', this.onCellMove);
     document.addEventListener('pointerup', this.onCellUp);
     document.addEventListener('pointercancel', this.onCellUp);
   }
 
+  private beginCellDrag() {
+    if (!this.anchor) return;
+    this.dragging = true;
+    this.cellSel.set({ r1: this.anchor.r, c1: this.anchor.c, r2: this.anchor.r, c2: this.anchor.c });
+    window.getSelection()?.removeAllRanges();
+  }
+
   private readonly onCellMove = (e: PointerEvent) => {
     if (!this.dragging) {
-      // Bevæger musen sig før tiden er gået, er det ikke en markering
       const p = this.pressPoint;
-      if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 6) this.stopCellDrag();
-      return;
+      if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) <= 5) return;
+      if (this.pressIsMouse) this.beginCellDrag();
+      else this.stopCellDrag();
+      if (!this.dragging) return;
     }
     const cell = this.cellAt(document.elementFromPoint(e.clientX, e.clientY));
     if (cell && this.anchor) {
@@ -1008,7 +1168,8 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     const [r1, r2] = [Math.min(s.r1, s.r2), Math.max(s.r1, s.r2)];
     const [c1, c2] = [Math.min(s.c1, s.c2), Math.max(s.c1, s.c2)];
     if (r < r1 || r > r2 || c < c1 || c > c2) return null;
-    return ['x', r === r1 ? 't' : '', r === r2 ? 'b' : '', c === c1 ? 'l' : '', c === c2 ? 'r' : ''].join(' ').trim();
+    const one = r1 === r2 && c1 === c2 ? 'o' : '';
+    return ['x', one, r === r1 ? 't' : '', r === r2 ? 'b' : '', c === c1 ? 'l' : '', c === c2 ? 'r' : ''].join(' ').trim();
   }
 
   private updateVirtual() {
@@ -1056,7 +1217,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     next.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     // Er detaljerne åbne, følger de den række, der får fokus
     if (this.detailId() !== null && this.detailMode() !== 'modal' && this.detailMode() !== 'page') {
-      const p = this.rows()[Number(next.closest('tr')!.dataset['index'])];
+      const p = this.viewRows()[Number(next.closest('tr')!.dataset['index']) - this.rowOffset()];
       if (p) this.detailId.set(p.id);
     }
   }
@@ -1067,19 +1228,190 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     if (!s) return;
     if (e.key === 'Escape') {
       this.cellSel.set(null);
-    } else if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
-      const rows = this.rows();
-      const cols = this.columns();
-      const lines: string[] = [];
-      for (let r = Math.min(s.r1, s.r2); r <= Math.max(s.r1, s.r2); r++) {
-        const cells: string[] = [];
-        for (let c = Math.min(s.c1, s.c2); c <= Math.max(s.c1, s.c2); c++) {
-          cells.push(this.plainValue(rows[r], cols[c].key));
-        }
-        lines.push(cells.join('\t'));
-      }
-      navigator.clipboard?.writeText(lines.join('\n'));
     }
+  }
+
+  // Browserens egen kopiér-hændelse er mere pålidelig end at gætte på tastekombinationen
+  @HostListener('document:copy', ['$event'])
+  onDocumentCopy(e: ClipboardEvent) {
+    const text = this.selectionText();
+    if (!this.cellSel() || !text || !e.clipboardData) return;
+    e.clipboardData.setData('text/plain', text);
+    e.clipboardData.setData('text/html', this.selectionHtml());
+    e.preventDefault();
+  }
+
+  /** Antal markerede celler og rækker */
+  readonly cellSelCount = computed(() => {
+    const s = this.cellSel();
+    if (!s) return null;
+    const rows = Math.abs(s.r2 - s.r1) + 1;
+    const cols = Math.abs(s.c2 - s.c1) + 1;
+    if (rows * cols < 2) return null;
+    return { cells: rows * cols, rows, cols };
+  });
+
+  private selectedCells(): string[][] {
+    const s = this.cellSel();
+    if (!s) return [];
+    const rows = this.viewRows();
+    const off = this.rowOffset();
+    const cols = this.columns();
+    const out: string[][] = [];
+    for (let r = Math.min(s.r1, s.r2); r <= Math.max(s.r1, s.r2); r++) {
+      const line: string[] = [];
+      for (let c = Math.min(s.c1, s.c2); c <= Math.max(s.c1, s.c2); c++) {
+        line.push(rows[r - off] && cols[c] ? this.plainValue(rows[r - off], cols[c].key) : '');
+      }
+      out.push(line);
+    }
+    return out;
+  }
+
+  private selectionText() {
+    return this.selectedCells().map((l) => l.join('\t')).join('\n');
+  }
+
+  // HTML-tabel gør, at Noter, Word og Excel indsætter celler som en rigtig tabel
+  private selectionHtml() {
+    const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const rows = this.selectedCells()
+      .map((l) => '<tr>' + l.map((v) => `<td>${esc(v)}</td>`).join('') + '</tr>')
+      .join('');
+    return `<table><tbody>${rows}</tbody></table>`;
+  }
+
+  copySelection() {
+    const text = this.selectionText();
+    if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+      const item = new ClipboardItem({
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+        'text/html': new Blob([this.selectionHtml()], { type: 'text/html' }),
+      });
+      navigator.clipboard.write([item]).catch(() => this.legacyCopy(text));
+    } else {
+      this.legacyCopy(text);
+    }
+  }
+
+  private legacyCopy(text: string) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+
+  exportSelection() {
+    const csv = this.selectedCells()
+      .map((l) => l.map((v) => `"${v.replace(/"/g, '""')}"`).join(';'))
+      .join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'markerede-celler.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Samlepostering der kan foldes ud
+  readonly expanded = signal<ReadonlySet<number>>(new Set());
+  isExpanded(p: Payment) {
+    return this.expanded().has(p.id);
+  }
+  toggleGroup(p: Payment, e: Event) {
+    e.stopPropagation();
+    this.expanded.update((s) => {
+      const next = new Set(s);
+      if (!next.delete(p.id)) next.add(p.id);
+      return next;
+    });
+  }
+
+  readonly hasGroups = computed(() => this.displayRows().some((p) => !!p.children));
+
+  // Inline-redigering som i AG Grid: dobbeltklik, Enter/F2 eller bare begynd at skrive i den markerede celle
+  readonly editingId = signal<number | null>(null);
+  readonly editValue = signal('');
+  startEdit(p: Payment, e?: Event, initial?: string) {
+    e?.stopPropagation();
+    this.editValue.set(initial ?? p.reference);
+    this.editingId.set(p.id);
+    setTimeout(() => {
+      const input = this.host.nativeElement.querySelector<HTMLInputElement>('input.bare-input');
+      if (!input) return;
+      input.focus();
+      if (initial === undefined) input.select();
+      else input.setSelectionRange(initial.length, initial.length);
+    });
+  }
+  commitEdit(p: Payment) {
+    if (this.editingId() !== p.id) return;
+    this.editingId.set(null);
+    const value = this.editValue().trim();
+    if (value === p.reference) return;
+    const sel = this.cellSel();
+    this.service.setReference(p.id, value);
+    // Rækkerne gendannes ved ændring af data, og så ville markeringen forsvinde
+    setTimeout(() => this.cellSel.set(sel));
+  }
+  cancelEdit() {
+    this.editingId.set(null);
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onDocumentKeydown(e: KeyboardEvent) {
+    const s = this.cellSel();
+    if (!s || !this.cfg().inlineEdit || this.editingId() !== null) return;
+    if (s.r1 !== s.r2 || s.c1 !== s.c2 || this.columns()[s.c1]?.key !== 'reference') return;
+    if ((e.target as HTMLElement).closest?.('input,textarea,select,button,[contenteditable],ion-modal,kirby-modal-wrapper,kirby-menu')) return;
+    const p = this.viewRows()[s.r1 - this.rowOffset()];
+    if (!p) return;
+    if (e.key === 'Enter' || e.key === 'F2') {
+      e.preventDefault();
+      this.startEdit(p);
+    } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      this.startEdit(p, undefined, e.key);
+    }
+  }
+
+  // Deling af data: alle filtrerede rækker med de viste kolonner
+  private exportMatrix(): string[][] {
+    const cols = this.columns();
+    return [
+      cols.map((c) => c.label),
+      ...this.rows().map((p) => cols.map((c) => (c.key === 'amount' ? this.formatAmount(p.amount) : this.plainValue(p, c.key)))),
+    ];
+  }
+  private download(content: string, type: string, name: string) {
+    const url = URL.createObjectURL(new Blob(['\ufeff' + content], { type }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  exportAllCsv() {
+    const csv = this.exportMatrix().map((l) => l.map((v) => `"${v.replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    this.download(csv, 'text/csv;charset=utf-8', 'betalinger.csv');
+  }
+  exportAllExcel() {
+    const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const rows = this.exportMatrix().map((l) => '<tr>' + l.map((v) => `<td>${esc(v)}</td>`).join('') + '</tr>').join('');
+    this.download(`<table>${rows}</table>`, 'application/vnd.ms-excel', 'betalinger.xls');
+  }
+  shareLink() {
+    const url = location.href;
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).catch(() => this.legacyCopy(url));
+    else this.legacyCopy(url);
+  }
+
+  clearCellSel() {
+    this.cellSel.set(null);
   }
 
   sort(key: ColumnKey) {
@@ -1097,17 +1429,28 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     return this.selected().has(p.id);
   }
 
+  /** Samleposteringens afkrydsningsfelt er delvist markeret, når kun nogle af enkeltposteringerne er valgt */
+  isPartlySelected(p: Payment): boolean {
+    if (!p.children || this.isSelected(p)) return false;
+    return p.children.some((c) => this.selected().has(c.id));
+  }
+
   toggleRow(p: Payment, checked: boolean) {
     this.selected.update((s) => {
       const next = new Set(s);
-      if (checked) next.add(p.id);
-      else next.delete(p.id);
+      const ids = [p.id, ...(p.children ?? []).map((c) => c.id)];
+      ids.forEach((id) => (checked ? next.add(id) : next.delete(id)));
+      if (p.parentId !== undefined) {
+        const parent = this.rows().find((r) => r.id === p.parentId);
+        if (parent?.children?.every((c) => next.has(c.id))) next.add(parent.id);
+        else next.delete(p.parentId);
+      }
       return next;
     });
   }
 
   toggleAll(checked: boolean) {
-    this.selected.set(checked ? new Set(this.rows().map((r) => r.id)) : new Set());
+    this.selected.set(checked ? new Set(this.allIds()) : new Set());
   }
 
   approve(p: Payment) {
@@ -1139,6 +1482,8 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     if (this.suppressClick) return;
     const target = event?.target as HTMLElement | null;
     if (target?.closest('kirby-checkbox, button, kirby-menu, kirby-item, a')) return;
+    const col = target?.closest<HTMLElement>('td[data-col]')?.dataset['col'];
+    if (col) this.focusCol.set(col as ColumnKey);
     const mode = this.detailMode();
     if (mode === 'none') return;
     if (mode === 'page') {

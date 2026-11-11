@@ -4,7 +4,7 @@
   width: 100%;
   // Skillelinjer følger underlaget: canvas (light) og hævet kort (white)
   --divider-color: var(--kirby-semi-light);
-  --highlight-color: var(--kirby-info, #2f6fed);
+  --highlight-color: var(--kirby-focus-ring-color);
   --kirby-card-border: 1px solid var(--divider-color);
 }
 
@@ -146,28 +146,35 @@
   }
 
   // Hele kolonnen løftes og bliver en anelse større; skygge og indsætningslinje tegnes som ét element
+  // Den løftede kolonne står som en svag plads, mens et spøgelse følger markøren
   th.lifted,
   td.lifted {
-    z-index: 5;
-    background-color: var(--kirby-white);
-    transform: scale(1.04);
+    opacity: 0.4;
     cursor: grabbing;
-  }
-  td.lifted:not(.fz-l):not(.fz-r) {
-    position: relative;
   }
 
   .col-select {
     width: var(--pin-select-width);
     min-width: var(--pin-select-width);
     max-width: var(--pin-select-width);
-    padding-left: var(--kirby-spacing-s);
+    box-sizing: border-box;
+    padding-left: 0;
     padding-right: 0;
+    text-align: center;
     position: relative;
     z-index: 1;
   }
   thead .col-select {
     z-index: 3;
+  }
+  .col-select kirby-checkbox {
+    display: flex;
+    justify-content: center;
+    ::ng-deep ion-checkbox {
+      flex: none;
+      // Ionics kryds-felt er 60 px bredt og venstrejusteret; forskydningen centrerer selve afkrydsningsfeltet
+      transform: translateX(6px);
+    }
   }
 
   &.pin-left {
@@ -186,9 +193,11 @@
     position: sticky;
     z-index: 1;
   }
-  thead .fz-l,
-  thead .fz-r {
-    z-index: 3;
+  thead th.fz-l,
+  thead th.fz-r,
+  &.sticky-header thead th.fz-l,
+  &.sticky-header thead th.fz-r {
+    z-index: 4;
   }
   .fz-l.fz-edge {
     --sh-div: 1px 0 0 var(--divider-color);
@@ -243,7 +252,7 @@
     cursor: default;
   }
   .th-sort:focus-visible {
-    outline: 2px solid var(--kirby-primary);
+    outline: 2px solid var(--kirby-focus-ring-color);
   }
 
 
@@ -265,6 +274,63 @@
   }
 
   .col-nowrap {
+    white-space: nowrap;
+  }
+
+  .group-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kirby-spacing-xxs);
+    min-width: 0;
+  }
+
+  .group-spacer {
+    display: inline-block;
+    flex: none;
+    width: var(--kirby-spacing-s);
+  }
+  // Pilen rykkes ind i cellens venstre padding, så datoerne ikke står så langt fra kolonnekanten
+  .group-cell > button[kirby-button] {
+    margin-left: calc(-1 * var(--kirby-spacing-xs));
+  }
+
+  // Grå baggrund kræver tydeligere skillelinjer. Kirbys lister bruger medium på grå flader
+  tr.child-row:not(.selected):not(.active-row) td {
+    background-color: var(--kirby-background-color);
+    color: var(--kirby-text-color-semi-dark);
+    --divider-color: var(--kirby-semi-light);
+  }
+
+  th[data-col='attachments'] .th-inner {
+    justify-content: center;
+  }
+
+  // Redigeringsfeltet ligner cellen. Cellens markeringsramme viser, at den er aktiv
+  .bare-input {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+  }
+
+  .attach-icons {
+    display: flex;
+    justify-content: center;
+    gap: var(--kirby-spacing-xxs);
+    color: var(--kirby-text-color-semi-dark);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
     white-space: nowrap;
   }
 
@@ -312,7 +378,7 @@
   &.hl-cell tbody td[data-sel]::after {
     content: '';
     position: absolute;
-    inset: 0;
+    inset: -1px;
     pointer-events: none;
     z-index: 4;
     border: 0 solid var(--highlight-color);
@@ -329,7 +395,7 @@
   &.hl-cell tbody td:focus-visible::after {
     border-width: 2px;
   }
-  &.hl-cell tbody td[data-sel]::after {
+  &.hl-cell tbody td[data-sel]:not([data-sel~='o'])::after {
     background-color: color-mix(in srgb, var(--highlight-color) 12%, transparent);
   }
   &.hl-cell tbody td[data-sel~='t']::after {
@@ -384,8 +450,8 @@
   }
 
   &.col-dividers {
-    th:not(.col-actions):not(:last-child):not(:nth-last-child(2)),
-    td:not(.col-actions):not(:last-child):not(:nth-last-child(2)) {
+    th:not(.col-actions):not(:last-child),
+    td:not(.col-actions):not(:last-child) {
       border-right: 1px solid var(--divider-color);
     }
     .fz-edge {
@@ -544,6 +610,27 @@ tr.active-row,
   }
 }
 
+// Handlingslinje for markerede celler. Hæfter sig i bunden, så den altid er inden for syne
+.cell-bar {
+  position: sticky;
+  bottom: var(--kirby-spacing-m);
+  z-index: 8;
+  width: fit-content;
+  margin: var(--kirby-spacing-s) auto 0;
+  --kirby-card-elevation: var(--kirby-elevation-8);
+}
+
+.cell-bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--kirby-spacing-xxs);
+  padding: var(--kirby-spacing-xxs) var(--kirby-spacing-xxs) var(--kirby-spacing-xxs) var(--kirby-spacing-s);
+
+  .kirby-text-small {
+    margin-right: var(--kirby-spacing-xs);
+  }
+}
+
 // Paneler har fuld højde: inline-panelet strækker sig over hele tabellens højde, og indholdet
 // hæfter sig i toppen, så det følger med, når siden scrolles
 .inline-panel > app-payment-detail {
@@ -696,11 +783,9 @@ tr.active-row,
 
 @keyframes inline-in {
   from {
-    flex-basis: 0;
     opacity: 0;
   }
   to {
-    flex-basis: 400px;
     opacity: 1;
   }
 }
@@ -795,12 +880,20 @@ tr.active-row,
   --btn3-bg: var(--kirby-white);
 }
 
-:host(.on-canvas) .table-scroll.hl-cell tbody tr.clickable td:not(.col-select):not(.col-actions):hover {
-  background-color: var(--hover-bg);
+:host(.on-canvas) .table-scroll.hl-cell tbody tr.clickable:hover:not(.selected):not(.active-row),
+:host(.on-card) .table-scroll.hl-cell tbody tr.clickable:hover:not(.selected):not(.active-row) {
+  --row-bg: var(--hover-bg);
+  --btn3-bg: var(--kirby-white);
 }
 
+:host(.on-canvas) .table-scroll.hl-cell tbody tr.clickable:hover:not(.selected):not(.active-row) {
+  --btn3-bg: var(--kirby-dark-overlay);
+}
+
+// Med celle-markering får rækken en svag hover, og cellen under musen en tydeligere
+:host(.on-canvas) .table-scroll.hl-cell tbody tr.clickable td:not(.col-select):not(.col-actions):hover,
 :host(.on-card) .table-scroll.hl-cell tbody tr.clickable td:not(.col-select):not(.col-actions):hover {
-  background-color: var(--hover-bg);
+  background-color: color-mix(in srgb, var(--kirby-tertiary) 16%, var(--kirby-white));
 }
 
 .table-scroll tbody tr.selected,
@@ -814,6 +907,17 @@ tr.active-row,
 .card.selected,
 .card.active-row {
   --btn3-bg: var(--kirby-white);
+}
+
+// Med zebrastriber bevarer markerede rækker forskellen mellem lige og ulige rækker:
+// samme tint, men blandet med rækkens egen farve (canvas: ulige rækker er canvas, kort: lige rækker er canvas)
+:host(.on-canvas) .table-scroll.zebra tbody tr:not(.alt):is(.selected, .active-row),
+:host(.on-card) .table-scroll.zebra tbody tr.alt:is(.selected, .active-row) {
+  --row-bg: color-mix(in srgb, var(--kirby-tertiary) 18%, var(--kirby-background-color));
+}
+:host(.on-canvas) .table-scroll.zebra:not(.hl-cell) tbody tr:not(.alt).clickable:hover:not(.selected):not(.active-row),
+:host(.on-card) .table-scroll.zebra:not(.hl-cell) tbody tr.alt.clickable:hover:not(.selected):not(.active-row) {
+  --row-bg: color-mix(in srgb, var(--kirby-tertiary) 6%, var(--kirby-background-color));
 }
 
 .spacer td,
@@ -850,7 +954,7 @@ tr.spacer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--kirby-spacing-xs);
+  gap: var(--kirby-spacing-xxs);
   box-sizing: border-box;
   height: 60px;
   margin: 0 calc(-1 * var(--kirby-spacing-s));
@@ -969,6 +1073,7 @@ tr.spacer {
   .more-saved-remove,
   .saved-chips,
   .search,
+  .share-menu,
   app-user-view-menu {
     position: relative;
     top: calc(var(--kirby-spacing-s) * 3 / 8);
@@ -983,6 +1088,13 @@ tr.spacer {
     max-width: 320px;
     margin-left: auto;
     margin-bottom: 0;
+  }
+  // Samme afstand mellem kontrolelementerne som mellem hurtigfiltrene. Knapperne har selv en margen
+  app-user-view-menu {
+    margin-left: -12px;
+  }
+  .share-menu {
+    margin-left: -16px;
   }
   .hidden {
     display: none;
@@ -1014,19 +1126,18 @@ tr.spacer {
   opacity: 1;
 }
 
-.lift-shadow,
 .drop-line {
   position: absolute;
   pointer-events: none;
 }
-.lift-shadow {
-  z-index: 4;
-  box-shadow:
-    -6px 0 10px -6px rgb(0 0 0 / 35%),
-    6px 0 10px -6px rgb(0 0 0 / 35%);
-}
+
 .drop-line {
   z-index: 10;
   width: 3px;
-  background-color: var(--kirby-primary);
+  background-color: var(--kirby-focus-ring-color);
+}
+
+// SF-ikonet har ikke Kirby-ikonets margener, så knapper med det får samme afstand som med kirby-icon
+button[kirby-button] app-sf-icon {
+  margin: 0 var(--kirby-spacing-xxxs) 0 calc(var(--kirby-spacing-xxxs) * -1);
 }

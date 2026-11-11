@@ -29,8 +29,13 @@ export interface Payment {
   fromAccount: string;
   accountOwner: string;
   reference: string;
+  attachments: 'Ingen' | 'Bilag' | 'Note' | 'Bilag og note';
   status: PaymentStatus;
   recipientCheck: RecipientCheck;
+  /** Samlepostering: de betalinger, rækken samler. */
+  children?: Payment[];
+  /** Enkeltpostering i en samlepostering: id på samleposteringen. */
+  parentId?: number;
 }
 
 export const ACTIONABLE_STATUSES: PaymentStatus[] = [
@@ -150,10 +155,32 @@ export function createPayments(count = 200): Payment[] {
       fromAccount: owner.accounts[i % owner.accounts.length],
       accountOwner: owner.name,
       reference: REFERENCES[i % REFERENCES.length],
+      attachments: (['Ingen', 'Bilag', 'Ingen', 'Note', 'Ingen', 'Bilag og note', 'Ingen'] as const)[(i * 3) % 7],
       status: completed ? 'Gennemført' : STATUSES[(i * 5) % STATUSES.length],
       recipientCheck: t.type === 'Indbetalingskort' || t.type === 'Løn' ? 'Modtagertjek fravalgt' : CHECKS[i % CHECKS.length],
     });
   }
+  // Tre samlepostering som kan foldes ud. De samler betalinger med samme dato og valuta
+  [3, 12, 27].forEach((idx, n) => {
+    const g = payments[idx];
+    const kids: Payment[] = Array.from({ length: 3 + n }, (_, k) => ({
+      ...payments[(idx + k + 20) % count],
+      id: 1000 + idx * 10 + k,
+      date: g.date,
+      currency: g.currency,
+      status: g.status,
+      children: undefined,
+      parentId: g.id,
+    }));
+    payments[idx] = {
+      ...g,
+      recipient: `Samlepostering (${kids.length} betalinger)`,
+      type: 'Samlepostering',
+      subtype: 'Flere betalinger',
+      amount: Math.round(kids.reduce((sum, c) => sum + c.amount, 0) * 100) / 100,
+      children: kids,
+    };
+  });
   return payments;
 }
 

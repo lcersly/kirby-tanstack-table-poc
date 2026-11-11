@@ -37,6 +37,7 @@
         <button
           kirby-button
           size="sm"
+          [showIconOnly]="actionsDisplay() === 'icon'"
           attentionLevel="1"
           [attr.title]="actionsDisplay() === 'icon' ? 'Godkend' : null"
           [attr.aria-label]="'Godkend betaling til ' + p.recipient"
@@ -53,6 +54,7 @@
         <button
           kirby-button
           size="sm"
+          [showIconOnly]="actionsDisplay() === 'icon'"
           attentionLevel="3"
           [attr.title]="actionsDisplay() === 'icon' ? 'Stop' : null"
           [attr.aria-label]="'Stop betaling til ' + p.recipient"
@@ -69,6 +71,7 @@
         <button
           kirby-button
           size="sm"
+          [showIconOnly]="actionsDisplay() === 'icon'"
           attentionLevel="3"
           [attr.title]="actionsDisplay() === 'icon' ? 'Rediger' : null"
           [attr.aria-label]="'Rediger betaling til ' + p.recipient"
@@ -145,7 +148,7 @@
     [class.zebra]="cfg().zebra"
     [class.plain-header]="!cfg().featureSort && !cfg().featureFilter"
     [class.col-dividers]="cfg().columnDividers"
-    [class.hl-cell]="cfg().highlight === 'cell'"
+    [class.hl-cell]="cfg().cellSelection"
     [class.is-stuck]="stuck()"
     [class.sh-left]="shadowLeft()"
     [class.sh-right]="shadowRight()"
@@ -187,7 +190,9 @@
               "
             >
               <span class="th-inner">
-                @if (cfg().featureSort) {
+                @if (col.hideLabel) {
+                  <span class="visually-hidden">{{ col.label }}</span>
+                } @else if (cfg().featureSort) {
                   <button type="button" class="th-sort" [class.active]="sortKey() === col.key" (click)="sort(col.key)">
                     <span>{{ col.label }}</span>
                     @if (sortKey() === col.key) {
@@ -213,6 +218,7 @@
                   (textChange)="setTextFilter(col.key, $event)"
                   (valuesChange)="setValueFilter(col.key, $event)"
                   (numberChange)="setNumberFilter(col.key, $event)"
+                  (dateChange)="setDateFilter(col.key, $event)"
                   (sort)="sortBy(col.key, $event)"
                   (freeze)="setFrozen(col.key, $event)"
                   [canResize]="cfg().userColumnWidth"
@@ -247,15 +253,16 @@
         @if (topSpacer() > 0) {
           <tr class="spacer" aria-hidden="true" [style.height.px]="topSpacer()"></tr>
         }
-        @for (p of displayRows(); track p.id; let ri = $index) {
+        @for (p of viewRows(); track p.id; let ri = $index) {
           <tr
             [attr.data-id]="p.id"
             [attr.data-index]="rowOffset() + ri"
             [class.alt]="(rowOffset() + ri) % 2 === 1"
             [class.selected]="isSelected(p)"
+            [class.child-row]="p.parentId !== undefined"
             [class.clickable]="detailMode() !== 'none'"
             [class.active-row]="detailId() === p.id"
-            [attr.tabindex]="detailMode() !== 'none' && cfg().highlight === 'row' ? 0 : null"
+            [attr.tabindex]="detailMode() !== 'none' && !cfg().cellSelection ? 0 : null"
             (click)="openDetail(p, $event)"
             (keydown.enter)="openDetail(p, $event)"
           >
@@ -264,6 +271,7 @@
                 <kirby-checkbox
                   [size]="checkboxSize()"
                   [checked]="isSelected(p)"
+                  [indeterminate]="isPartlySelected(p)"
                   (checkedChange)="toggleRow(p, $event)"
                   [attr.aria-label]="'Vælg betaling til ' + p.recipient"
                 ></kirby-checkbox>
@@ -274,7 +282,7 @@
                 [attr.data-r]="rowOffset() + ri"
                 [attr.data-c]="ci"
                 [attr.data-sel]="cellEdges(rowOffset() + ri, ci)"
-                [attr.tabindex]="detailMode() !== 'none' && cfg().highlight === 'cell' ? 0 : null"
+                [attr.tabindex]="detailMode() !== 'none' && cfg().cellSelection ? 0 : null"
                 [class.fz-l]="frozenInfo()[col.key]?.side === 'left'"
                 [class.fz-r]="frozenInfo()[col.key]?.side === 'right'"
                 [class.fz-edge]="frozenInfo()[col.key]?.edge"
@@ -283,19 +291,67 @@
                 [class.sized]="widthOf(col) !== null"
                 [style.--w.px]="widthOf(col)"
                 [class.text-align-right]="col.align === 'right'"
-                [class.col-nowrap]="col.key === 'amount' || col.key === 'currency' || col.key === 'date' || col.key === 'status' || col.key === 'recipientCheck'"
+                [class.col-nowrap]="col.key === 'amount' || col.key === 'currency' || col.key === 'date' || col.key === 'status' || col.key === 'attachments' || col.key === 'recipientCheck'"
                 [attr.data-col]="col.key"
                 [class.lifted]="dragKey() === col.key"
+                (dblclick)="col.key === 'reference' && cfg().inlineEdit ? startEdit(p, $event) : null"
               >
                 @switch (col.key) {
                   @case ('date') {
-                    {{ formatDate(p.date) }}
+                    <span class="group-cell">
+                      @if (p.children) {
+                        <button
+                          kirby-button
+                          size="xs"
+                          attentionLevel="3"
+                          [attr.aria-expanded]="isExpanded(p)"
+                          [attr.aria-label]="(isExpanded(p) ? 'Fold samlepostering sammen: ' : 'Fold samlepostering ud: ') + p.recipient"
+                          (click)="toggleGroup(p, $event)"
+                        >
+                          <kirby-icon [name]="isExpanded(p) ? 'arrow-up' : 'arrow-down'"></kirby-icon>
+                        </button>
+                      } @else if (hasGroups()) {
+                        <span class="group-spacer"></span>
+                      }
+                      {{ formatDate(p.date) }}
+                    </span>
                   }
                   @case ('amount') {
                     {{ formatAmount(p.amount) }}
                   }
                   @case ('currency') {
                     <app-currency [code]="p.currency" [showFlag]="cfg().currencyStyle === 'flag'" [flagSize]="avatarSize()"></app-currency>
+                  }
+                  @case ('reference') {
+                    @if (cfg().inlineEdit && editingId() === p.id) {
+                      <input
+                        class="bare-input"
+                        [attr.aria-label]="'Bilagsreference for ' + p.recipient"
+                        [value]="editValue()"
+                        (input)="editValue.set($any($event.target).value)"
+                        (pointerdown)="$event.stopPropagation()"
+                        (click)="$event.stopPropagation()"
+                        (keydown)="$event.stopPropagation()"
+                        (keydown.enter)="commitEdit(p)"
+                        (keydown.escape)="cancelEdit()"
+                        (blur)="commitEdit(p)"
+                      />
+                    } @else {
+                      <span class="cell-text" [attr.title]="p.reference">{{ p.reference }}</span>
+                    }
+                  }
+                  @case ('attachments') {
+                    <span class="attach-icons" [attr.title]="p.attachments === 'Ingen' ? null : p.attachments">
+                      @if (p.attachments === 'Bilag' || p.attachments === 'Bilag og note') {
+                        <kirby-icon name="attach" aria-hidden="true"></kirby-icon>
+                      }
+                      @if (p.attachments === 'Note' || p.attachments === 'Bilag og note') {
+                        <kirby-icon name="note" aria-hidden="true"></kirby-icon>
+                      }
+                      @if (p.attachments !== 'Ingen') {
+                        <span class="sr-only">{{ p.attachments }}</span>
+                      }
+                    </span>
                   }
                   @case ('status') {
                     <ng-container *ngTemplateOutlet="statusTpl; context: { $implicit: p }"></ng-container>
@@ -328,9 +384,6 @@
       </tbody>
     </table>
   </div>
-  @if (liftRect(); as r) {
-    <div class="lift-shadow" [style.left.px]="r.left" [style.top.px]="r.top" [style.width.px]="r.width" [style.height.px]="r.height"></div>
-  }
   @if (dropLine(); as d) {
     <div class="drop-line" [style.left.px]="d.left" [style.top.px]="d.top" [style.height.px]="d.height"></div>
   }
@@ -435,6 +488,16 @@
         @if (cfg().featureSettings) {
           <app-user-view-menu #userMenu [class.hidden]="!userMenu.any()"></app-user-view-menu>
         }
+        @if (cfg().featureShare) {
+          <kirby-menu class="share-menu" placement="bottom-end" [buttonSize]="ButtonSize.MD">
+            <button kirby-button attentionLevel="3" aria-label="Del data" title="Del data">
+              <kirby-icon name="share"></kirby-icon>
+            </button>
+            <kirby-item (click)="exportAllExcel()">Eksporter til Excel</kirby-item>
+            <kirby-item (click)="exportAllCsv()">Eksporter til CSV</kirby-item>
+            <kirby-item (click)="shareLink()">Del link</kirby-item>
+          </kirby-menu>
+        }
         @if (activeFilters().length) {
           <div class="filter-row" role="group" aria-label="Aktive filtre">
             @for (f of activeFilters(); track f.key) {
@@ -453,7 +516,7 @@
               Ryd alle filtre
             </button>
             @if (canSaveFilter()) {
-              <button kirby-button size="sm" attentionLevel="2" (click)="saveCurrentFilter()">
+              <button kirby-button size="sm" attentionLevel="3" (click)="saveCurrentFilter()">
                 <app-sf-icon name="bookmark" [size]="16"></app-sf-icon>
                 Gem filter
               </button>
@@ -463,6 +526,25 @@
       </div>
       }
       <ng-container *ngTemplateOutlet="listTpl"></ng-container>
+      @if (cellSelCount(); as n) {
+        <kirby-card class="cell-bar">
+          <div class="cell-bar-row" role="toolbar" aria-label="Markerede celler">
+          <span class="kirby-text-small">{{ n.cells }} {{ n.cells === 1 ? 'celle' : 'celler' }} markeret</span>
+          <button kirby-button size="sm" attentionLevel="3" (click)="copySelection()">
+            <kirby-icon name="copy"></kirby-icon>
+            Kopiér
+          </button>
+          <button kirby-button size="sm" attentionLevel="3" (click)="exportSelection()">
+            <kirby-icon name="download"></kirby-icon>
+            Eksportér
+          </button>
+          <button kirby-button size="sm" attentionLevel="3" aria-label="Fjern markering" (click)="clearCellSel()">
+            <kirby-icon name="close"></kirby-icon>
+          </button>
+        </div>
+        </kirby-card>
+
+      }
     </div>
 
     @if (inlineOpen()) {
@@ -475,6 +557,7 @@
         @if (bulkOpen()) {
           <app-bulk-summary
             [payments]="selectedPayments()"
+            [variant]="cfg().container"
             (closed)="toggleAll(false)"
             (approve)="approveIds($event)"
           ></app-bulk-summary>

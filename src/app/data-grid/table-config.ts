@@ -11,6 +11,7 @@ export type ColumnKey =
   | 'fromAccount'
   | 'accountOwner'
   | 'reference'
+  | 'attachments'
   | 'status'
   | 'recipientCheck';
 
@@ -24,12 +25,14 @@ export interface ColumnDef {
   priority: number;
   /** Cirka bredde i px. Bruges, når kolonner skjules ved pladsmangel. */
   width: number;
+  /** Kolonnen har ingen synlig overskrift (kun for skærmlæsere) og ingen kolonnemenu. */
+  hideLabel?: boolean;
   /** Kolonnen skjules aldrig ved pladsmangel og kan ikke fravælges af brugeren. */
   noHide?: boolean;
   /** Bestemmer teksten på sorteringsmulighederne. Standard er tekst. */
   kind?: 'text' | 'number' | 'date';
   /** Hvordan kolonnen filtreres. Standard er valg af enkelte værdier. */
-  filter?: 'values' | 'number' | 'text';
+  filter?: 'values' | 'number' | 'text' | 'date';
 }
 
 /** Retningen, kolonnen sorteres i første gang. Datoer starter med de nyeste. */
@@ -38,9 +41,8 @@ export function defaultDirection(col: Pick<ColumnDef, 'kind'>): 'asc' | 'desc' {
 }
 
 export const COLUMNS: ColumnDef[] = [
-  { key: 'date', label: 'Dato', plural: 'datoer', priority: 1, width: 110, noHide: true, kind: 'date' },
+  { key: 'date', label: 'Dato', plural: 'datoer', priority: 1, width: 110, noHide: true, kind: 'date', filter: 'date' },
   { key: 'recipient', label: 'Modtager', plural: 'modtagere', priority: 0, width: 240, noHide: true, filter: 'text' },
-  { key: 'amount', label: 'Beløb', plural: 'beløb', align: 'right', priority: 2, width: 120, noHide: true, kind: 'number', filter: 'number' },
   { key: 'currency', label: 'Valuta', plural: 'valutaer', priority: 7, width: 80 },
   { key: 'type', label: 'Betalingstype', plural: 'betalingstyper', priority: 5, width: 140 },
   { key: 'subtype', label: 'Undertype', plural: 'undertyper', priority: 8, width: 130 },
@@ -50,6 +52,8 @@ export const COLUMNS: ColumnDef[] = [
   { key: 'reference', label: 'Bilagsreference', plural: 'bilagsreferencer', priority: 11, width: 150, filter: 'text' },
   { key: 'status', label: 'Status', plural: 'statusser', priority: 3, width: 200 },
   { key: 'recipientCheck', label: 'Modtagertjek', plural: 'modtagertjek', priority: 6, width: 170 },
+  { key: 'amount', label: 'Beløb', plural: 'beløb', align: 'right', priority: 2, width: 120, noHide: true, kind: 'number', filter: 'number' },
+  { key: 'attachments', label: 'Bilag og note', plural: 'bilag og noter', priority: 4, width: 56, hideLabel: true },
 ];
 
 export type Density = 'compact' | 'standard' | 'spacious';
@@ -63,7 +67,6 @@ export type DetailMode = 'none' | 'modal' | 'side-modal' | 'side-nonmodal' | 'in
 export type Container = 'canvas' | 'card' | 'stroked-card';
 export type CheckboxSize = 'md' | 'xs';
 export type CurrencyStyle = 'flag' | 'code';
-export type Highlight = 'row' | 'cell';
 export type LoadingMode = 'all' | 'paging' | 'lazy' | 'virtual';
 export type ColumnOverflow = 'scroll' | 'hide';
 
@@ -75,8 +78,10 @@ export interface TableConfig {
   zebra: boolean;
   /** Lodrette skillelinjer mellem kolonner. */
   columnDividers: boolean;
-  /** Om det er hele rækken eller den enkelte celle, der fremhæves ved hover. */
-  highlight: Highlight;
+  /** Om brugeren kan markere en eller flere celler (og kopiere dem som tabel). */
+  cellSelection: boolean;
+  /** Bilagsreference og Til konto kan redigeres direkte i tabellen. */
+  inlineEdit: boolean;
   /** true = handlinger ligger altid i en overflow-menu. false = knapperne tilpasser sig pladsen. */
   actionsOverflow: boolean;
   statusStyle: StatusStyle;
@@ -111,6 +116,7 @@ export interface TableConfig {
   featureQuick: boolean;
   featureSearch: boolean;
   featureSettings: boolean;
+  featureShare: boolean;
   featureSort: boolean;
   featureFilter: boolean;
   featureRowActions: boolean;
@@ -131,7 +137,8 @@ export const DEFAULT_CONFIG: TableConfig = {
   stickyHeader: true,
   zebra: false,
   columnDividers: true,
-  highlight: 'row',
+  cellSelection: true,
+  inlineEdit: true,
   actionsOverflow: true,
   statusStyle: 'flag',
   noActionStatusStyle: 'text',
@@ -156,12 +163,13 @@ export const DEFAULT_CONFIG: TableConfig = {
   featureQuick: true,
   featureSearch: true,
   featureSettings: true,
+  featureShare: true,
   featureSort: true,
   featureFilter: true,
   featureRowActions: true,
 };
 
-export type PresetId = 'simple' | 'complex';
+export type PresetId = 'simple' | 'complex' | 'mvp';
 
 /** Hurtigvalg i udviklerindstillingerne. De ændrer kun det, der er nævnt her. */
 export const PRESETS: Record<PresetId, Partial<TableConfig>> = {
@@ -176,6 +184,7 @@ export const PRESETS: Record<PresetId, Partial<TableConfig>> = {
     featureQuick: false,
     featureSearch: false,
     featureSettings: false,
+    featureShare: false,
     featureSort: false,
     featureFilter: false,
     featureRowActions: false,
@@ -187,7 +196,34 @@ export const PRESETS: Record<PresetId, Partial<TableConfig>> = {
     userDividers: false,
     userScroll: false,
   },
+  mvp: {
+    container: 'card',
+    detailMode: 'inline',
+    cellSelection: true,
+    inlineEdit: true,
+    density: 'standard',
+    cardsOnSmallScreens: true,
+    zebra: false,
+    columnDividers: false,
+    featureSelect: true,
+    featureQuick: true,
+    featureSearch: true,
+    featureSettings: true,
+    featureShare: true,
+    featureSort: true,
+    featureFilter: true,
+    featureRowActions: true,
+    userColumnChoice: true,
+    userColumnWidth: false,
+    userColumnReorder: false,
+    userDensity: false,
+    userZebra: false,
+    userDividers: false,
+    userScroll: false,
+  },
   complex: {
+    cellSelection: true,
+    inlineEdit: true,
     container: 'canvas',
     pinned: 'both',
     columnOverflow: 'hide',
@@ -197,6 +233,7 @@ export const PRESETS: Record<PresetId, Partial<TableConfig>> = {
     featureQuick: true,
     featureSearch: true,
     featureSettings: true,
+    featureShare: true,
     featureSort: true,
     featureFilter: true,
     featureRowActions: true,
@@ -212,7 +249,8 @@ export const PRESETS: Record<PresetId, Partial<TableConfig>> = {
 
 @Injectable({ providedIn: 'root' })
 export class TableConfigService {
-  readonly config = signal<TableConfig>({ ...DEFAULT_CONFIG, visibleColumns: [...DEFAULT_CONFIG.visibleColumns] });
+  // Starter som konfigurationen "Avanceret"
+  readonly config = signal<TableConfig>({ ...DEFAULT_CONFIG, ...PRESETS.mvp, visibleColumns: [...DEFAULT_CONFIG.visibleColumns] });
 
   /** Brugerens valg og kolonnebredder. Gælder kun for det, udvikleren har givet brugeren lov til */
   readonly overrides = signal<UserOverrides>({});
@@ -258,6 +296,14 @@ export class TableConfigService {
   }
 
   set<K extends keyof TableConfig>(key: K, value: TableConfig[K]) {
+    // Udviklerens valg skal slå igennem, også selvom brugeren allerede har valgt noget
+    if (key === 'density' || key === 'zebra' || key === 'columnDividers' || key === 'columnOverflow') {
+      this.overrides.update((o) => {
+        const rest = { ...o };
+        delete rest[key as keyof typeof rest];
+        return rest;
+      });
+    }
     this.config.update((c) => ({ ...c, [key]: value }));
   }
 

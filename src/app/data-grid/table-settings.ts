@@ -12,7 +12,6 @@ import { ToggleComponent } from '@kirbydesign/designsystem/toggle';
 import { RadioComponent, RadioGroupComponent } from '@kirbydesign/designsystem/radio';
 import {
   CheckboxSize,
-  Highlight,
   Container,
   Density,
   DetailMode,
@@ -25,13 +24,14 @@ import {
   PRESETS,
 } from './table-config';
 
-type GroupId = 'features' | 'detail' | 'theme' | 'columns' | 'actions' | 'loading' | 'payments' | 'user';
+type GroupId = 'features' | 'detail' | 'theme' | 'columns' | 'actions' | 'loading' | 'cells' | 'payments' | 'user';
 
 type FeatureKey =
   | 'featureSelect'
   | 'featureQuick'
   | 'featureSearch'
   | 'featureSettings'
+  | 'featureShare'
   | 'featureSort'
   | 'featureFilter'
   | 'featureRowActions';
@@ -141,7 +141,6 @@ interface Option<T> {
             <ng-container *ngTemplateOutlet="selectRow; context: { $implicit: 'Rækkehøjde', options: densityOptions, key: 'density' }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Zebrastriber', checked: cfg().zebra, change: setZebra }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Kolonnelinjer', checked: cfg().columnDividers, change: setDividers }"></ng-container>
-            <ng-container *ngTemplateOutlet="selectRow; context: { $implicit: 'Fremhævning', options: highlightOptions, key: 'highlight' }"></ng-container>
           </kirby-card>
         }
         @case ('columns') {
@@ -184,6 +183,13 @@ interface Option<T> {
                 </kirby-item>
               }
             </kirby-radio-group>
+          </kirby-card>
+        }
+        @case ('cells') {
+          <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Celler', label: 'Vælg, hvordan man arbejder med enkelte celler' }"></ng-container>
+          <kirby-card class="rows">
+            <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Markering af celler', checked: cfg().cellSelection, change: setCellSelection }"></ng-container>
+            <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Inline-redigering', checked: cfg().inlineEdit, change: setInlineEdit }"></ng-container>
           </kirby-card>
         }
         @case ('payments') {
@@ -290,11 +296,12 @@ export class TableSettingsComponent {
   readonly presetItems = [
     { id: 'simple', text: 'Simpel' },
     { id: 'complex', text: 'Avanceret' },
+    { id: 'mvp', text: 'Betalingsoversigt MVP' },
   ];
   /** Markerer det hurtigvalg, som konfigurationen svarer til lige nu */
   readonly presetIndex = computed(() => {
     const c = this.cfg() as unknown as Record<string, unknown>;
-    const ids: PresetId[] = ['simple', 'complex'];
+    const ids: PresetId[] = ['simple', 'complex', 'mvp'];
     return ids.findIndex((id) =>
       Object.entries(PRESETS[id]).every(([k, v]) => JSON.stringify(c[k]) === JSON.stringify(v)),
     );
@@ -302,12 +309,14 @@ export class TableSettingsComponent {
   readonly presets: { id: PresetId; title: string }[] = [
     { id: 'simple', title: 'Simpel' },
     { id: 'complex', title: 'Avanceret' },
+    { id: 'mvp', title: 'Betalingsoversigt MVP' },
   ];
   readonly features: { key: FeatureKey; title: string }[] = [
     { key: 'featureSelect', title: 'Vælg flere' },
     { key: 'featureQuick', title: 'Hurtigfiltre' },
     { key: 'featureSearch', title: 'Søgning' },
     { key: 'featureSettings', title: 'Indstillinger' },
+    { key: 'featureShare', title: 'Deling af data' },
     { key: 'featureSort', title: 'Kolonnesortering' },
     { key: 'featureFilter', title: 'Kolonnefiltrering' },
     { key: 'featureRowActions', title: 'Rækkehandlinger' },
@@ -319,6 +328,7 @@ export class TableSettingsComponent {
     { id: 'columns', title: 'Kolonner' },
     { id: 'actions', title: 'Handlinger' },
     { id: 'loading', title: 'Indlæsning' },
+    { id: 'cells', title: 'Celler' },
     { id: 'payments', title: 'Betalingsoversigt' },
     { id: 'user', title: 'Brugerkonfiguration' },
   ];
@@ -338,6 +348,8 @@ export class TableSettingsComponent {
         return c.actionsOverflow ? 'Overflow' : this.labelOf(this.actionsForceOptions, c.actionsForce);
       case 'loading':
         return this.labelOf(this.loadingOptions, c.loading);
+      case 'cells':
+        return `${[c.cellSelection, c.inlineEdit].filter(Boolean).length} af 2 til`;
       case 'payments': {
         const n = [c.statusStyle === 'flag', c.checkStyle === 'flag', c.currencyStyle === 'flag'].filter(Boolean).length;
         return `${n} med flag`;
@@ -381,10 +393,6 @@ export class TableSettingsComponent {
     { value: 'standard', label: 'Standard' },
     { value: 'spacious', label: 'Luftig' },
   ];
-  readonly highlightOptions: Option<Highlight>[] = [
-    { value: 'row', label: 'Række' },
-    { value: 'cell', label: 'Celle' },
-  ];
   readonly checkboxOptions: Option<CheckboxSize>[] = [
     { value: 'xs', label: 'Små' },
     { value: 'md', label: 'Mellem' },
@@ -415,6 +423,8 @@ export class TableSettingsComponent {
   }
 
   readonly setZebra = (v: boolean) => this.update('zebra', v);
+  readonly setCellSelection = (v: boolean) => this.update('cellSelection', v);
+  readonly setInlineEdit = (v: boolean) => this.update('inlineEdit', v);
   readonly setDividers = (v: boolean) => this.update('columnDividers', v);
   readonly setScroll = (v: boolean) => this.update('columnOverflow', v ? 'scroll' : 'hide');
   readonly setWrap = (v: boolean) => this.update('textHandling', v ? 'wrap' : 'truncate');
