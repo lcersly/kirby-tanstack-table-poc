@@ -1,5 +1,7 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, afterNextRender, computed, inject, signal } from '@angular/core';
 import { AppComponent as KirbyAppComponent } from '@kirbydesign/designsystem/kirby-app';
+import { EmptyStateComponent } from '@kirbydesign/designsystem/empty-state';
+import { TabNavigationComponent, TabNavigationItemComponent } from '@kirbydesign/designsystem/tab-navigation';
 import { CardComponent } from '@kirbydesign/designsystem/card';
 import { ButtonComponent, ButtonSize } from '@kirbydesign/designsystem/button';
 import { IconComponent } from '@kirbydesign/designsystem/icon';
@@ -7,7 +9,7 @@ import { ItemComponent } from '@kirbydesign/designsystem/item';
 import { MenuComponent } from '@kirbydesign/designsystem/menu';
 import { ModalController } from '@kirbydesign/designsystem/modal';
 import { ActionGroupComponent } from '@kirbydesign/designsystem/action-group';
-import { HeaderActionsDirective, HeaderComponent } from '@kirbydesign/designsystem/header';
+import { HeaderActionsDirective, HeaderComponent, HeaderTitleActionIconDirective } from '@kirbydesign/designsystem/header';
 import {
   PageComponent,
   PageContentComponent,
@@ -16,6 +18,9 @@ import { formatAmount, formatDate, canApprove, canEdit, canStop } from './paymen
 import { PaymentsService } from './payments.service';
 import { TableConfigService } from './table-config';
 import { PaymentsTableComponent } from './payments-table';
+import { TransactionsTableComponent } from './transactions-table';
+import { DeliveriesComponent } from './deliveries';
+import { TransactionsService } from './transactions';
 import { TableSettingsComponent } from './table-settings';
 
 interface NavItem {
@@ -30,9 +35,12 @@ const ACTIVE_CHILD = 'Godkend betalinger';
 @Component({
   selector: 'app-data-grid',
   imports: [
+    HeaderTitleActionIconDirective,
+    TransactionsTableComponent,
     KirbyAppComponent,
     ButtonComponent,
     CardComponent,
+    EmptyStateComponent,
     IconComponent,
     ItemComponent,
     MenuComponent,
@@ -42,15 +50,48 @@ const ACTIVE_CHILD = 'Godkend betalinger';
     PageComponent,
     PageContentComponent,
     PaymentsTableComponent,
+    DeliveriesComponent,
+    TabNavigationComponent,
+    TabNavigationItemComponent,
   ],
   templateUrl: './data-grid.html',
   styleUrl: './data-grid.scss',
 })
 export class DataGrid {
   readonly ButtonSize = ButtonSize;
+  readonly paymentsTab = signal(0);
+  readonly showDeliveries = computed(
+    () => this.paymentsTab() === 1 && !['empty', 'error', 'transactions'].includes(this.tableConfig.config().dataset),
+  );
   private readonly modalController = inject(ModalController);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private titleObserver?: IntersectionObserver;
+  private observedTitle: Element | null = null;
+
+  constructor() {
+    // Toolbarens titel vises først, når headerens titel er rullet ud af syne
+    afterNextRender(() => {
+      const root = this.host.nativeElement;
+      this.titleObserver = new IntersectionObserver((entries) => {
+        const last = entries[entries.length - 1];
+        root.classList.toggle('title-scrolled', !!last && !last.isIntersecting);
+      });
+      const watch = () => {
+        const el = root.querySelector('.data-header .title');
+        if (el === this.observedTitle) return;
+        if (this.observedTitle) this.titleObserver?.unobserve(this.observedTitle);
+        this.observedTitle = el;
+        if (el) this.titleObserver?.observe(el);
+        else root.classList.remove('title-scrolled');
+      };
+      new MutationObserver(watch).observe(root, { childList: true, subtree: true });
+      watch();
+    });
+  }
   readonly payments = inject(PaymentsService);
-  private readonly tableConfig = inject(TableConfigService);
+  readonly tableConfig = inject(TableConfigService);
+  readonly txs = inject(TransactionsService);
+  readonly isTransactions = computed(() => this.tableConfig.config().dataset === 'transactions');
   // På canvas strækker tabellen sig helt ud til kanterne af indholdsområdet
   readonly bleed = computed(() => this.tableConfig.config().container === 'canvas');
 

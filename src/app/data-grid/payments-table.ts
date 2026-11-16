@@ -8,6 +8,7 @@ import {
   OnInit,
   computed,
   inject,
+  DestroyRef,
   effect,
   signal,
   untracked,
@@ -23,7 +24,7 @@ import { IconComponent } from '@kirbydesign/designsystem/icon';
 import { ItemComponent } from '@kirbydesign/designsystem/item';
 import { MenuComponent } from '@kirbydesign/designsystem/menu';
 import { CardComponent } from '@kirbydesign/designsystem/card';
-import { ModalController } from '@kirbydesign/designsystem/modal';
+import { COMPONENT_PROPS, ModalController } from '@kirbydesign/designsystem/modal';
 import { CurrencyComponent } from './currency';
 import { RecipientCheckComponent } from './recipient-check';
 import {
@@ -57,7 +58,7 @@ const SELECT_WIDTH = 56;
 export const MOCK_TODAY = '2026-10-14';
 export const QUICK_FILTERS = [
   { id: 'upcoming', label: 'Kommende', test: (p: Payment) => p.date > MOCK_TODAY },
-  { id: 'missing', label: 'Mangler godkendelse', test: (p: Payment) => p.status.startsWith('Mangler') },
+  { id: 'missing', label: 'Afventer godkendelse', test: (p: Payment) => p.status.startsWith('Afventer 1')||p.status.startsWith('Afventer 2') },
   { id: 'rejected', label: 'Afviste', test: (p: Payment) => p.status === 'Afvist' },
   { id: 'error', label: 'Fejl', test: (p: Payment) => p.status === 'Fejl' },
 ] as const;
@@ -149,7 +150,7 @@ export function numberFilterLabel(n: NumberFilter): string {
   }
 }
 
-function numberMatches(v: number, n: NumberFilter): boolean {
+export function numberMatches(v: number, n: NumberFilter): boolean {
   const a = n.a as number;
   switch (n.op) {
     case 'gt':
@@ -174,6 +175,7 @@ const ACTION_STEPS = [
 ] as const;
 const DISCLOSURE_WIDTH = 56;
 const INLINE_PANEL_WIDTH = 400;
+const WIDE_PANEL_WIDTH = 520;
 const PAGE_SIZE = 20;
 const VIRTUAL_BUFFER = 8;
 const ROW_HEIGHTS = { compact: 32, standard: 44, spacious: 64 } as const;
@@ -224,7 +226,15 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
 
   private readonly service = inject(PaymentsService);
   private readonly modalController = inject(ModalController);
-  readonly payments = this.service.payments;
+  /** Åbnet i en modal fra en leverance: kun den leverances betalinger vises */
+  private readonly modalProps = inject<{ payments?: Payment[] }>(COMPONENT_PROPS, { optional: true });
+  readonly payments = this.modalProps?.payments ? signal(this.modalProps.payments).asReadonly() : this.service.payments;
+  private readonly registerExtra = this.modalProps?.payments
+    ? (() => {
+        this.service.extra.set(this.modalProps.payments!);
+        inject(DestroyRef).onDestroy(() => this.service.extra.set([]));
+      })()
+    : undefined;
   readonly detailId = signal<number | null>(null);
   readonly selected = signal<ReadonlySet<number>>(new Set());
   readonly sortKey = signal<ColumnKey>('date');
@@ -237,10 +247,18 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   readonly pageMode = computed(() => this.detailMode() === 'page');
   readonly detailPayment = computed(() => this.service.get(this.detailId() ?? undefined));
   /** Flere valgte betalinger vises som overblik i et inline-panel */
-  readonly bulkOpen = computed(() => this.selected().size >= 1);
-  readonly inlineOpen = computed(
-    () => this.bulkOpen() || (this.detailMode() === 'inline' && this.detailPayment() !== undefined),
+  // Lønbetalinger har en liste med lønmodtagere og får et bredere panel
+  readonly panelWidth = computed(() =>
+    !this.bulkOpen() && this.detailPayment()?.payees ? WIDE_PANEL_WIDTH : INLINE_PANEL_WIDTH,
   );
+  readonly bulkOpen = computed(() => this.selected().size >= 1);
+  /** Summeringspanelet kan skjules til en lille snip, uden at rækkernes markering fjernes */
+  readonly panelCollapsed = signal(false);
+  readonly inlineOpen = computed(
+    () => (this.bulkOpen() && !this.panelCollapsed()) || (this.detailMode() === 'inline' && this.detailPayment() !== undefined),
+  );
+  /** Pladsen, tabellen regner med til panelet. */
+  readonly layoutPanel = signal(0);
   readonly sideOpen = computed(
     () =>
       !this.bulkOpen() &&
@@ -252,7 +270,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     () => this.pageMode() && this.service.get(this.pageDetailId() ?? undefined) !== undefined,
   );
   // Når kolonner skjules ved pladsmangel (eller inline-panelet er åbent), må tabellen aldrig rulle sidelæns
-  readonly fitColumns = computed(() => this.cfg().columnOverflow === 'hide' || this.inlineOpen());
+  readonly fitColumns = computed(() => this.cfg().columnOverflow === 'hide' || this.layoutPanel() > 0);
   readonly flagSize = computed(() => ({ compact: 'xs', standard: 'sm', spacious: 'md' } as const)[this.cfg().density]);
 
   private effWidth(c: ColumnDef): number {
@@ -270,10 +288,10 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
       (a, b) => order.indexOf(a.key) - order.indexOf(b.key),
     );
     // Inline-panelet skubber tabellen og skjuler de mindst vigtige kolonner
-    const hide = this.cfg().columnOverflow === 'hide' || this.inlineOpen();
+    const hide = this.cfg().columnOverflow === 'hide' || this.layoutPanel() > 0;
     if (!hide) return chosen;
     const fixed = this.selectWidth() + Math.max(this.actionsWidth(), 64) + FIT_MARGIN;
-    let available = this.width() - (this.inlineOpen() ? INLINE_PANEL_WIDTH : 0) - fixed;
+    let available = this.width() - this.layoutPanel() - fixed;
     const keep = new Set<ColumnKey>();
     for (const c of chosen.filter((c) => c.noHide)) {
       keep.add(c.key);
@@ -306,7 +324,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     if (this.cfg().actionsOverflow) return 'menu';
     const forced = this.cfg().actionsForce;
     if (forced !== 'auto') return forced;
-    const available = this.width() - (this.inlineOpen() ? INLINE_PANEL_WIDTH : 0);
+    const available = this.width() - this.layoutPanel();
     return ACTION_STEPS.find((s) => available >= s.minTable)?.display ?? 'menu';
   });
 
@@ -589,7 +607,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   private readonly visibleSavedCount = computed(() => {
     const saved = this.savedFilters();
     if (saved.length === 1) return 1;
-    let budget = this.width() - (this.inlineOpen() ? INLINE_PANEL_WIDTH : 0) - 32 - 380 - 620;
+    let budget = this.width() - this.layoutPanel() - 32 - 380 - 620;
     let count = 0;
     for (const s of saved) {
       const w = 40 + s.name.length * 8 + 8;
@@ -812,6 +830,14 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
 
   constructor() {
     effect(() => {
+      const w = this.inlineOpen() ? this.panelWidth() : 0;
+      this.layoutPanel.set(w);
+    });
+    effect(() => {
+      if (!this.bulkOpen()) this.panelCollapsed.set(false);
+      else untracked(() => this.detailId.set(null));
+    });
+    effect(() => {
       this.pinnedCfg();
       untracked(() => this.frozen.set(this.defaultFrozen()));
     });
@@ -917,7 +943,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     for (const c of cells) {
       const r = c.getBoundingClientRect();
       const cell = document.createElement('div');
-      cell.style.cssText = `display:flex;align-items:center;box-sizing:border-box;padding:0 var(--kirby-spacing-s);border-bottom:1px solid var(--kirby-semi-light);white-space:nowrap;overflow:hidden;font-size:var(--kirby-font-size-s);font-family:inherit`;
+      cell.style.cssText = `display:flex;align-items:center;box-sizing:border-box;padding:0 var(--kirby-spacing-s);border-bottom:1px solid var(--kirby-color-border-base-quiet, #dadada);white-space:nowrap;overflow:hidden;font-size:var(--kirby-font-size-s);font-family:inherit`;
       cell.style.height = `${r.height}px`;
       cell.style.justifyContent = c.classList.contains('num') || getComputedStyle(c).textAlign === 'right' ? 'flex-end' : 'flex-start';
       cell.innerHTML = c.innerHTML;
@@ -1024,7 +1050,20 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     const row = root.querySelector<HTMLElement>('tbody tr');
     const stuck = !!th && !!row && row.getBoundingClientRect().top < th.getBoundingClientRect().bottom - 1;
     root.classList.toggle('stuck', stuck);
+    this.updatePanelHeight();
   };
+
+  // Panelet hæfter sig først i toppen, når siden er rullet ned. Indtil da må det kun fylde det synlige stykke, så hele panelet kan rulles
+  private updatePanelHeight() {
+    const el = this.host.nativeElement;
+    const container = el.querySelector<HTMLElement>('.inline-panel');
+    const scroller = this.innerScroll;
+    if (!container || !scroller) return;
+    const view = scroller.getBoundingClientRect();
+    const top = Math.max(container.getBoundingClientRect().top, view.top);
+    const h = `${Math.max(0, Math.round(view.bottom - top))}px`;
+    if (el.style.getPropertyValue('--panel-h') !== h) el.style.setProperty('--panel-h', h);
+  }
 
   ngOnInit() {
     document.addEventListener('scroll', this.onScroll, { capture: true, passive: true });
@@ -1053,6 +1092,7 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     const visible = `${this.innerScroll?.clientHeight || window.innerHeight}px`;
     if (el.style.getPropertyValue('--scroll-h') !== visible) el.style.setProperty('--scroll-h', visible);
     if (el.style.getPropertyValue('--toolbar-h') !== v) el.style.setProperty('--toolbar-h', v);
+    this.updatePanelHeight();
   }
 
   ngOnDestroy() {
@@ -1403,6 +1443,10 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
     const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const rows = this.exportMatrix().map((l) => '<tr>' + l.map((v) => `<td>${esc(v)}</td>`).join('') + '</tr>').join('');
     this.download(`<table>${rows}</table>`, 'application/vnd.ms-excel', 'betalinger.xls');
+  }
+  // [OPEN POINT: Hvad skal udskrives – hele oversigten eller kun de viste rækker?]
+  print() {
+    window.print();
   }
   shareLink() {
     const url = location.href;

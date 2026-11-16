@@ -141,8 +141,10 @@
 }
 
 .content.bleed {
-  --page-content-padding-start: 0px;
-  --page-content-padding-end: 0px;
+  // Fanernes streg afgrænser tabellen, så der ikke vises to vandrette streger
+  --stage-top-border: none;
+  --page-content-padding-start: var(--kirby-spacing-s);
+  --page-content-padding-end: var(--kirby-spacing-s);
 
   ::ng-deep .page-header-container {
     padding-inline: var(--kirby-spacing-s);
@@ -160,13 +162,15 @@
   align-items: center;
   gap: var(--kirby-spacing-s);
   padding: var(--kirby-spacing-xs) var(--kirby-spacing-s);
-  border-bottom: 1px solid var(--kirby-semi-light);
+  border-bottom: 1px solid var(--kirby-color-border-base-quiet, #dadada);
 }
 
 .meta-control {
   position: fixed;
-  right: var(--kirby-spacing-l);
-  top: var(--kirby-spacing-xs);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  bottom: var(--kirby-spacing-xxl);
   z-index: 10;
   width: 320px;
   max-width: calc(100vw - 2 * var(--kirby-spacing-s));
@@ -206,5 +210,43 @@
   .meta-control {
     right: var(--kirby-spacing-s);
     top: var(--kirby-spacing-xs);
+  }
+}
+
+// Kirbys header har ikke selv semi-dark undertekster, så de farves med Kirbys tekstfarve
+.data-header ::ng-deep .subtitle {
+  color: var(--kirby-text-color-semi-dark);
+}
+
+.empty-help {
+  margin: 0 0 var(--kirby-spacing-m);
+  color: var(--kirby-text-color-semi-dark);
+}
+
+.empty-card {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding-block: var(--kirby-spacing-xxl);
+}
+
+// Toolbarens titel er skjult, indtil headerens titel er rullet ud af syne
+:host:not(.title-scrolled) ::ng-deep kirby-page ion-header ion-title {
+  opacity: 0;
+  pointer-events: none;
+}
+
+kirby-list,
+kirby-card,
+kirby-item {
+  --kirby-list-item-border-color: var(--kirby-color-border-base-quiet, #dadada);
+  --kirby-card-border: 1px solid var(--kirby-color-border-base-quiet, #dadada);
+}
+
+.payments-tabs {
+  display: block;
+  margin-bottom: var(--kirby-spacing-m);
+  &.on-canvas {
+    margin-bottom: 0;
   }
 }

@@ -20,6 +20,7 @@ import {
   TableConfigService,
   ActionsForce,
   NoActionStatusStyle,
+  Dataset,
   PresetId,
   PRESETS,
 } from './table-config';
@@ -199,9 +200,20 @@ interface Option<T> {
             <ng-container *ngTemplateOutlet="selectRow; context: { $implicit: 'Status uden handling', options: noActionOptions, key: 'noActionStatusStyle' }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Vis modtagertjek som flag', checked: cfg().checkStyle === 'flag', change: setCheckFlag }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Vis flag foran valutakoder', checked: cfg().currencyStyle === 'flag', change: setCurrencyFlag }"></ng-container>
+            <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Bruger må se lønmodtagernes navne', checked: cfg().showPayeeNames, change: setPayeeNames }"></ng-container>
           </kirby-card>
         }
         @default {
+          <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Data', label: 'Vælg hvilke data tabellen viser' }"></ng-container>
+          <div class="presets">
+            <kirby-segmented-control
+              mode="chip"
+              aria-label="Data"
+              [items]="datasetItems"
+              [selectedIndex]="datasetIndex()"
+              (selectedIndexChange)="update('dataset', datasetItems[$event].id)"
+            ></kirby-segmented-control>
+          </div>
           <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Indstillinger', label: 'Vælg hvordan tabellen skal se ud og fungere' }"></ng-container>
           <ng-container *ngTemplateOutlet="labelHeader; context: { $implicit: 'Hurtigvalg' }"></ng-container>
           <div class="presets">
@@ -270,7 +282,7 @@ interface Option<T> {
       margin-bottom: var(--kirby-spacing-m);
     }
     .rows kirby-item:not(:last-of-type) {
-      border-bottom: 1px solid var(--kirby-semi-light);
+      border-bottom: 1px solid var(--kirby-color-border-base-quiet, #dadada);
     }
     .muted {
       color: var(--kirby-text-color-semi-dark);
@@ -293,10 +305,17 @@ export class TableSettingsComponent {
 
   readonly cfg = this.service.config;
   readonly group = signal<GroupId | null>(null);
+  readonly datasetItems: { id: Dataset; text: string }[] = [
+    { id: 'payments', text: 'Betalinger' },
+    { id: 'transactions', text: 'Kontobevægelser' },
+    { id: 'empty', text: 'Empty state' },
+    { id: 'error', text: 'Error state' },
+  ];
+  readonly datasetIndex = computed(() => this.datasetItems.findIndex((d) => d.id === this.cfg().dataset));
   readonly presetItems = [
     { id: 'simple', text: 'Simpel' },
     { id: 'complex', text: 'Avanceret' },
-    { id: 'mvp', text: 'Betalingsoversigt MVP' },
+    { id: 'mvp', text: 'Minimal Viable Product' },
   ];
   /** Markerer det hurtigvalg, som konfigurationen svarer til lige nu */
   readonly presetIndex = computed(() => {
@@ -309,7 +328,7 @@ export class TableSettingsComponent {
   readonly presets: { id: PresetId; title: string }[] = [
     { id: 'simple', title: 'Simpel' },
     { id: 'complex', title: 'Avanceret' },
-    { id: 'mvp', title: 'Betalingsoversigt MVP' },
+    { id: 'mvp', title: 'Minimal Viable Product' },
   ];
   readonly features: { key: FeatureKey; title: string }[] = [
     { key: 'featureSelect', title: 'Vælg flere' },
@@ -422,6 +441,7 @@ export class TableSettingsComponent {
     this.service.set(key as keyof TableConfig, value as never);
   }
 
+  readonly setPayeeNames = (v: boolean) => this.update('showPayeeNames', v);
   readonly setZebra = (v: boolean) => this.update('zebra', v);
   readonly setCellSelection = (v: boolean) => this.update('cellSelection', v);
   readonly setInlineEdit = (v: boolean) => this.update('inlineEdit', v);

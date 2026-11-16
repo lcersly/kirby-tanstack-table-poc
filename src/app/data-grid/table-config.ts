@@ -43,17 +43,17 @@ export function defaultDirection(col: Pick<ColumnDef, 'kind'>): 'asc' | 'desc' {
 export const COLUMNS: ColumnDef[] = [
   { key: 'date', label: 'Dato', plural: 'datoer', priority: 1, width: 110, noHide: true, kind: 'date', filter: 'date' },
   { key: 'recipient', label: 'Modtager', plural: 'modtagere', priority: 0, width: 240, noHide: true, filter: 'text' },
-  { key: 'currency', label: 'Valuta', plural: 'valutaer', priority: 7, width: 80 },
+  { key: 'status', label: 'Status', plural: 'statusser', priority: 3, width: 200 },
+  { key: 'recipientCheck', label: 'Modtagertjek', plural: 'modtagertjek', priority: 6, width: 170 },
   { key: 'type', label: 'Betalingstype', plural: 'betalingstyper', priority: 5, width: 140 },
   { key: 'subtype', label: 'Undertype', plural: 'undertyper', priority: 8, width: 130 },
   { key: 'toAccount', label: 'Til konto', plural: 'til konti', priority: 9, width: 190, filter: 'text' },
   { key: 'fromAccount', label: 'Fra konto', plural: 'fra konti', priority: 10, width: 160 },
   { key: 'accountOwner', label: 'Kontoejer', plural: 'kontoejere', priority: 12, width: 200 },
   { key: 'reference', label: 'Bilagsreference', plural: 'bilagsreferencer', priority: 11, width: 150, filter: 'text' },
-  { key: 'status', label: 'Status', plural: 'statusser', priority: 3, width: 200 },
-  { key: 'recipientCheck', label: 'Modtagertjek', plural: 'modtagertjek', priority: 6, width: 170 },
   { key: 'amount', label: 'Beløb', plural: 'beløb', align: 'right', priority: 2, width: 120, noHide: true, kind: 'number', filter: 'number' },
-  { key: 'attachments', label: 'Bilag og note', plural: 'bilag og noter', priority: 4, width: 56, hideLabel: true },
+  { key: 'currency', label: 'Valuta', plural: 'valutaer', priority: 7, width: 80 },
+  { key: 'attachments', label: 'Note', plural: 'noter', priority: 4, width: 56, hideLabel: true },
 ];
 
 export type Density = 'compact' | 'standard' | 'spacious';
@@ -70,7 +70,11 @@ export type CurrencyStyle = 'flag' | 'code';
 export type LoadingMode = 'all' | 'paging' | 'lazy' | 'virtual';
 export type ColumnOverflow = 'scroll' | 'hide';
 
+export type Dataset = 'payments' | 'transactions' | 'empty' | 'error';
+
 export interface TableConfig {
+  /** Hvilke data tabellen viser. */
+  dataset: Dataset;
   density: Density;
   textHandling: TextHandling;
   pinned: PinnedColumns;
@@ -120,6 +124,8 @@ export interface TableConfig {
   featureSort: boolean;
   featureFilter: boolean;
   featureRowActions: boolean;
+  /** Brugeren må se lønmodtageres navne. Ellers vises kun løbenummer. */
+  showPayeeNames: boolean;
 }
 
 /** Brugerens egne valg, som ligger oven på udviklerindstillingerne */
@@ -131,6 +137,7 @@ export interface UserOverrides {
 }
 
 export const DEFAULT_CONFIG: TableConfig = {
+  dataset: 'payments',
   density: 'standard',
   textHandling: 'truncate',
   pinned: 'both',
@@ -167,6 +174,7 @@ export const DEFAULT_CONFIG: TableConfig = {
   featureSort: true,
   featureFilter: true,
   featureRowActions: true,
+  showPayeeNames: false,
 };
 
 export type PresetId = 'simple' | 'complex' | 'mvp';
@@ -197,6 +205,7 @@ export const PRESETS: Record<PresetId, Partial<TableConfig>> = {
     userScroll: false,
   },
   mvp: {
+    showPayeeNames: true,
     container: 'card',
     detailMode: 'inline',
     cellSelection: true,
@@ -216,9 +225,9 @@ export const PRESETS: Record<PresetId, Partial<TableConfig>> = {
     userColumnChoice: true,
     userColumnWidth: false,
     userColumnReorder: false,
-    userDensity: false,
-    userZebra: false,
-    userDividers: false,
+    userDensity: true,
+    userZebra: true,
+    userDividers: true,
     userScroll: false,
   },
   complex: {

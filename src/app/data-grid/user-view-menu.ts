@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, Injector, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, Injector, computed, inject, input, signal, viewChild } from '@angular/core';
 import { ButtonComponent } from '@kirbydesign/designsystem/button';
 import { CardComponent } from '@kirbydesign/designsystem/card';
 import { CheckboxComponent } from '@kirbydesign/designsystem/checkbox';
@@ -116,7 +116,7 @@ const DENSITIES: { value: Density; label: string }[] = [
               ></kirby-toggle>
             </kirby-item>
           }
-          @if (cfg().userColumnChoice) {
+          @if (cfg().userColumnChoice && columnChoice()) {
             <kirby-item [selectable]="true" disclosure="arrow-more" (click)="go('columns')">
               <kirby-icon slot="start" name="checklist"></kirby-icon>
               Vælg kolonner
@@ -146,7 +146,7 @@ const DENSITIES: { value: Density; label: string }[] = [
       box-shadow: 0 4px 16px rgb(0 0 0 / 16%);
     }
     kirby-item:not(:last-child) {
-      border-bottom: 1px solid var(--kirby-semi-light);
+      border-bottom: 1px solid var(--kirby-color-border-base-quiet, #dadada);
     }
     .view {
       animation: slide-in-back 240ms ease-out;
@@ -196,11 +196,12 @@ const DENSITIES: { value: Density; label: string }[] = [
       padding: var(--kirby-spacing-xs) var(--kirby-spacing-m);
       font-size: var(--kirby-font-size-s);
       color: var(--kirby-text-color-semi-dark);
-      border-bottom: 1px solid var(--kirby-semi-light);
+      border-bottom: 1px solid var(--kirby-color-border-base-quiet, #dadada);
     }
   `,
 })
 export class UserViewMenuComponent {
+  readonly columnChoice = input(true);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly service = inject(TableConfigService);
   protected readonly cfg = this.service.config;
@@ -261,7 +262,7 @@ export class UserViewMenuComponent {
   /** Knappen vises kun, når brugeren må ændre mindst én ting */
   readonly any = computed(() => {
     const c = this.cfg();
-    return c.userColumnWidth || c.userColumnReorder || c.userColumnChoice || c.userDensity || c.userZebra || c.userDividers || c.userScroll;
+    return c.userColumnWidth || c.userColumnReorder || (c.userColumnChoice && this.columnChoice()) || c.userDensity || c.userZebra || c.userDividers || c.userScroll;
   });
 
   protected toggle(e: Event) {

@@ -3,13 +3,13 @@
   position: relative;
   width: 100%;
   // Skillelinjer følger underlaget: canvas (light) og hævet kort (white)
-  --divider-color: var(--kirby-semi-light);
+  --divider-color: var(--kirby-color-border-base-quiet, #dadada);
   --highlight-color: var(--kirby-focus-ring-color);
   --kirby-card-border: 1px solid var(--divider-color);
 }
 
 :host(.on-card) {
-  --divider-color: var(--kirby-light);
+  --divider-color: var(--kirby-color-border-base-quiet, #dadada);
 }
 
 // Markering har sin egen farve (en meget lys tint af tertiary), så den adskiller sig fra zebrastriberne
@@ -298,7 +298,7 @@
   tr.child-row:not(.selected):not(.active-row) td {
     background-color: var(--kirby-background-color);
     color: var(--kirby-text-color-semi-dark);
-    --divider-color: var(--kirby-semi-light);
+    --divider-color: var(--kirby-color-border-base-quiet, #dadada);
   }
 
   th[data-col='attachments'] .th-inner {
@@ -322,7 +322,11 @@
     display: flex;
     justify-content: center;
     gap: var(--kirby-spacing-xxs);
-    color: var(--kirby-text-color-semi-dark);
+    color: var(--kirby-warning-text, var(--kirby-warning-shade));
+
+    &.plain {
+      color: var(--kirby-black);
+    }
   }
 
   .sr-only {
@@ -633,12 +637,19 @@ tr.active-row,
 
 // Paneler har fuld højde: inline-panelet strækker sig over hele tabellens højde, og indholdet
 // hæfter sig i toppen, så det følger med, når siden scrolles
-.inline-panel > app-payment-detail {
+.inline-panel > app-payment-detail,
+.inline-panel > app-bulk-summary,
+.inline-panel > app-transactions-summary {
   position: sticky;
   top: var(--sticky-top, 0);
-  max-height: calc(var(--scroll-h, 100vh) - var(--sticky-top, 0px));
+  max-height: var(--panel-h, calc(var(--scroll-h, 100vh) - var(--sticky-top, 0px)));
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.inline-panel > app-bulk-summary,
+.inline-panel > app-transactions-summary {
+  min-width: 400px;
 }
 
 .side-panel {
@@ -668,6 +679,7 @@ tr.active-row,
 .inline-panel {
   will-change: transform, opacity;
   flex: 0 0 400px;
+  width: 400px;
   align-self: stretch;
   max-width: 100%;
   border-left: 1px solid var(--divider-color);
@@ -690,11 +702,11 @@ tr.active-row,
   position: fixed;
   inset: 0;
   z-index: 1000;
-  --divider-color: var(--kirby-semi-light);
+  --divider-color: var(--kirby-color-border-base-quiet, #dadada);
   pointer-events: none;
 
   &.is-card {
-    --divider-color: var(--kirby-light);
+    --divider-color: var(--kirby-color-border-base-quiet, #dadada);
   }
 
   .scrim {
@@ -748,15 +760,29 @@ tr.active-row,
   animation: fade 200ms ease-in reverse forwards;
 }
 .inline-in {
-  animation: inline-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: inline-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .inline-out {
-  animation: inline-in 220ms cubic-bezier(0.4, 0, 1, 1) reverse forwards;
+  animation: inline-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
-// Panelet vokser ind fra højre, så tabellen glider med i stedet for at hoppe
+// Ved lukning får tabellen straks sin fulde bredde (ét hop, mens der trykkes), og panelet
+// glider ud ovenpå i stedet for at tabellen skal tegnes om undervejs
+@media (min-width: 768px) {
+  .stage:has(.inline-out) {
+    overflow: clip;
+  }
+  .inline-panel.inline-out {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    animation-name: inline-out-slide;
+  }
+}
+// Panelet glider ind fra højre og toner ud igen. Kun transform og opacity animeres, så tabellen
+// ikke skal tegnes om for hvert billede; kolonnerne regnes først om, når panelet er væk.
 .inline-panel.inline-in,
 .inline-panel.inline-out {
-  overflow: hidden;
   > app-payment-detail,
   > app-bulk-summary {
     min-width: 400px;
@@ -784,9 +810,31 @@ tr.active-row,
 @keyframes inline-in {
   from {
     opacity: 0;
+    transform: translateX(var(--kirby-spacing-xl));
   }
   to {
     opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes inline-out-slide {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes inline-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(var(--kirby-spacing-xl));
   }
 }
 
@@ -821,6 +869,7 @@ tr.active-row,
   }
   .inline-out {
     animation-name: inline-in-stacked;
+    animation-direction: reverse;
   }
   .stage.has-inline {
     flex-direction: column;
@@ -849,7 +898,7 @@ tr.active-row,
 
 // På canvas er der ingen ramme, så en vandret linje øverst afgrænser tabellen og inline-panelet samlet
 :host(.on-plain) .stage {
-  border-top: 1px solid var(--divider-color);
+  border-top: var(--stage-top-border, 1px solid var(--divider-color));
 }
 
 :host(.on-canvas) .table-scroll {
@@ -957,6 +1006,7 @@ tr.spacer {
   gap: var(--kirby-spacing-xxs);
   box-sizing: border-box;
   height: 60px;
+  clear: both;
   margin: 0 calc(-1 * var(--kirby-spacing-s));
   padding: var(--kirby-spacing-xxs) var(--kirby-spacing-s);
   border-top: 1px solid var(--divider-color);
@@ -1006,13 +1056,35 @@ tr.spacer {
   top: var(--sticky-top, 0px);
   z-index: 3;
   background-color: var(--toolbar-bg, var(--kirby-background-color));
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--kirby-spacing-s);
-  padding: var(--kirby-spacing-xs) var(--kirby-spacing-s);
+  display: flow-root;
+  padding: var(--kirby-spacing-s) var(--kirby-spacing-s) 0;
   border-bottom: 1px solid var(--divider-color);
 
+  // Hver række ombrydes for sig, så rækkerne altid ligger i samme rækkefølge
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kirby-spacing-s);
+    min-width: 0;
+  }
+  // Badges sidder uden for knapperne; luften i toppen af segmentet trækkes fra, så afstanden til kanten er ens
+  // Søgning og knapper bliver i øverste højre hjørne. Hurtigfiltrene rykker en række ned, når der ikke er plads
+  .row-tools {
+    float: right;
+    flex-wrap: nowrap;
+    margin: 0 0 0 var(--kirby-spacing-s);
+  }
+  .row-quick {
+    display: flow-root;
+    width: max-content;
+    max-width: 100%;
+    margin: calc(-1 * var(--kirby-spacing-xs)) 0 var(--kirby-spacing-s) -4px;
+  }
+  .row-saved {
+    clear: both;
+    margin-bottom: var(--kirby-spacing-s);
+  }
   .quick {
     flex: 0 0 auto;
   }
@@ -1020,14 +1092,6 @@ tr.spacer {
   .quick ::ng-deep ion-segment {
     padding-top: var(--kirby-spacing-s);
     padding-right: var(--kirby-spacing-m);
-  }
-  .vdivider {
-    align-self: stretch;
-    width: 1px;
-    margin: var(--kirby-spacing-xxs) 0;
-    // Segmentet har luft til badges i højre side; den trækkes fra, så afstanden er ens på begge sider
-    margin-left: calc(-1 * var(--kirby-spacing-m));
-    background-color: var(--divider-color);
   }
   .saved-chips {
     display: flex;
@@ -1068,33 +1132,27 @@ tr.spacer {
       --kirby-icon-font-size: var(--kirby-icon-font-size-xs, 16px);
     }
   }
-  // Badges giver segmenterne ekstra plads foroven, så de øvrige elementer rykkes med, så de flugter
-  .more-saved,
-  .more-saved-remove,
-  .saved-chips,
-  .search,
-  .share-menu,
-  app-user-view-menu {
-    position: relative;
-    top: calc(var(--kirby-spacing-s) * 3 / 8);
-  }
   .more-saved {
     flex: 0 0 180px;
     margin: 0;
   }
   .search {
-    flex: 1;
-    min-width: 200px;
-    max-width: 320px;
-    margin-left: auto;
-    margin-bottom: 0;
+    flex: 0 0 240px;
+    margin: 0;
   }
-  // Samme afstand mellem kontrolelementerne som mellem hurtigfiltrene. Knapperne har selv en margen
-  app-user-view-menu {
-    margin-left: -12px;
-  }
-  .share-menu {
-    margin-left: -16px;
+  .panel-toggle {
+    flex: 0 0 auto;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    color: var(--kirby-black-contrast);
+    app-sf-icon {
+      color: var(--kirby-black-contrast);
+      width: 24px;
+      height: 24px;
+      scale: 1 !important;
+      margin: 0 !important;
+    }
   }
   .hidden {
     display: none;

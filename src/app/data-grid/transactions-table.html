@@ -1,0 +1,279 @@
+<ng-template #statusTpl let-t>
+  @if (statusAsFlag(t.status)) {
+    <kirby-flag [size]="flagSize()" [themeColor]="statusColor(t.status)">{{ t.status }}</kirby-flag>
+  } @else if (statusAsOutline(t.status)) {
+    <kirby-flag [size]="flagSize()">{{ t.status }}</kirby-flag>
+  } @else {
+    <span>{{ t.status }}</span>
+  }
+</ng-template>
+
+<ng-template #listTpl>
+@if (showCards()) {
+  <ul class="cards">
+    @for (t of viewRows(); track t.id) {
+      <li class="card" [class.selected]="isSelected(t)">
+        <div class="card-top">
+          @if (cfg().featureSelect) {
+            <kirby-checkbox
+              [size]="checkboxSize()"
+              [checked]="isSelected(t)"
+              (checkedChange)="toggleRow(t, $event)"
+              [attr.aria-label]="'Vælg postering ' + t.text"
+            ></kirby-checkbox>
+          }
+          <div class="card-main">
+            <div class="kirby-text-small-bold">{{ t.text }}</div>
+            <div class="kirby-text-small muted">{{ formatDate(t.date) }} · Valør {{ formatDate(t.valueDate) }}</div>
+          </div>
+          <div class="card-amount kirby-text-small-bold">{{ formatAmount(t.amount) }}</div>
+        </div>
+        <div class="card-flags">
+          <ng-container *ngTemplateOutlet="statusTpl; context: { $implicit: t }"></ng-container>
+          @if (t.recipientCheck) {
+            <app-recipient-check
+              [check]="t.recipientCheck"
+              [asFlag]="cfg().checkStyle === 'flag'"
+              [flagSize]="flagSize()"
+              [avatarSize]="checkAvatarSize()"
+            ></app-recipient-check>
+          }
+        </div>
+        <div class="kirby-text-xsmall muted">
+          Saldo {{ formatAmount(t.balance) }} {{ t.currency }}
+          @if (t.reference) {
+            · {{ t.reference }}
+          }
+        </div>
+      </li>
+    }
+  </ul>
+} @else {
+  <div
+    class="table-scroll"
+    [class.sticky-header]="cfg().stickyHeader"
+    [class.zebra]="cfg().zebra"
+    [class.plain-header]="!cfg().featureSort && !cfg().featureFilter"
+    [class.col-dividers]="cfg().columnDividers"
+    [class.is-stuck]="stuck()"
+    [class.fit]="fitColumns()"
+    [class.wrap]="cfg().textHandling === 'wrap'"
+    [class.truncate]="cfg().textHandling === 'truncate'"
+    [attr.data-density]="cfg().density"
+  >
+    <table class="kirby-table">
+      <thead>
+        <tr>
+          @if (cfg().featureSelect) {
+            <th class="col-select">
+              <kirby-checkbox
+                [size]="checkboxSize()"
+                [checked]="allSelected()"
+                [indeterminate]="someSelected()"
+                (checkedChange)="toggleAll($event)"
+                aria-label="Vælg alle posteringer"
+              ></kirby-checkbox>
+            </th>
+          }
+          @for (col of columns(); track col.key) {
+            <th
+              [attr.data-col]="col.key"
+              [class.align-right]="col.align === 'right'"
+              [attr.aria-sort]="sortKey() === col.key ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : null"
+            >
+              <span class="th-inner">
+                @if (col.hideLabel) {
+                  <span class="visually-hidden">{{ col.label }}</span>
+                } @else if (cfg().featureSort) {
+                  <button type="button" class="th-sort" [class.active]="sortKey() === col.key" (click)="sort(col.key)">
+                    <span>{{ col.label }}</span>
+                    @if (sortKey() === col.key) {
+                      <app-sf-arrow class="sort-icon" [direction]="sortDirection() === defaultDirection(col) ? 'down' : 'up'" [size]="12"></app-sf-arrow>
+                    } @else {
+                      <app-sf-arrow class="sort-ghost" direction="down" [size]="12"></app-sf-arrow>
+                    }
+                  </button>
+                } @else {
+                  <span class="th-sort static">{{ col.label }}</span>
+                }
+                @if (!col.hideLabel && (cfg().featureFilter || cfg().featureSort)) {
+                  <app-column-menu
+                    [column]="$any(col)"
+                    [filter]="filters()[col.key]"
+                    [values]="valueOptions()[col.key]"
+                    [sortDirection]="sortKey() === col.key ? sortDirection() : null"
+                    [canChoose]="false"
+                    [canSort]="cfg().featureSort"
+                    [canFilter]="cfg().featureFilter"
+                    [canFreeze]="false"
+                    (textChange)="setTextFilter(col.key, $event)"
+                    (valuesChange)="setValueFilter(col.key, $event)"
+                    (numberChange)="setNumberFilter(col.key, $event)"
+                    (dateChange)="setDateFilter(col.key, $event)"
+                    (sort)="sortBy(col.key, $event)"
+                  ></app-column-menu>
+                }
+              </span>
+            </th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of viewRows(); track t.id; let ri = $index) {
+          <tr
+            [class.alt]="ri % 2 === 1"
+            [class.selected]="isSelected(t)"
+            [class.clickable]="true"
+            [class.active-row]="detailId() === t.id"
+            (click)="openDetail(t, $event)"
+          >
+            @if (cfg().featureSelect) {
+              <td class="col-select">
+                <kirby-checkbox
+                  [size]="checkboxSize()"
+                  [checked]="isSelected(t)"
+                  (checkedChange)="toggleRow(t, $event)"
+                  [attr.aria-label]="'Vælg postering ' + t.text"
+                ></kirby-checkbox>
+              </td>
+            }
+            @for (col of columns(); track col.key) {
+              <td
+                [class.text-align-right]="col.align === 'right'"
+                [class.col-nowrap]="col.nowrap"
+                [attr.data-col]="col.key"
+              >
+                @switch (col.key) {
+                  @case ('date') {
+                    {{ formatDate(t.date) }}
+                  }
+                  @case ('valueDate') {
+                    {{ formatDate(t.valueDate) }}
+                  }
+                  @case ('amount') {
+                    {{ formatAmount(t.amount) }}
+                  }
+                  @case ('currency') {
+                    <app-currency [code]="t.currency" [showFlag]="cfg().currencyStyle === 'flag'" [flagSize]="avatarSize()"></app-currency>
+                  }
+                  @case ('balance') {
+                    {{ formatAmount(t.balance) }}
+                  }
+                  @case ('status') {
+                    <ng-container *ngTemplateOutlet="statusTpl; context: { $implicit: t }"></ng-container>
+                  }
+                  @case ('recipientCheck') {
+                    @if (t.recipientCheck) {
+                      <app-recipient-check
+                        [check]="t.recipientCheck"
+                        [asFlag]="cfg().checkStyle === 'flag'"
+                        [flagSize]="flagSize()"
+                        [avatarSize]="checkAvatarSize()"
+                      ></app-recipient-check>
+                    }
+                  }
+                  @case ('attachments') {
+                    @if (t.hasAttachment) {
+                      <span class="attach-icons plain" title="Bilag">
+                        <kirby-icon name="attach" aria-hidden="true"></kirby-icon>
+                        <span class="sr-only">Bilag</span>
+                      </span>
+                    }
+                  }
+                  @default {
+                    <span class="cell-text" [attr.title]="plainValue(t, col.key)">{{ plainValue(t, col.key) }}</span>
+                  }
+                }
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+</ng-template>
+
+<ng-template #stageTpl>
+  <div class="stage" [class.has-inline]="bulkOpen()">
+    <div class="main">
+      <div class="toolbar" role="toolbar" aria-label="Periode og søgning">
+        @if (cfg().featureQuick) {
+          <kirby-segmented-control
+            class="quick"
+            mode="chip"
+            aria-label="Periode"
+            [items]="periodItems"
+            [selectedIndex]="periodIndex()"
+            (selectedIndexChange)="periodIndex.set($event)"
+          ></kirby-segmented-control>
+        }
+        @if (cfg().featureSearch) {
+          <kirby-form-field class="search">
+            <input
+              kirby-input
+              type="search"
+              size="md"
+              placeholder="Søg"
+              aria-label="Søg i alle kolonner"
+              [value]="search()"
+              (input)="search.set($any($event.target).value)"
+            />
+            <kirby-icon kirby-affix="prefix" name="search"></kirby-icon>
+          </kirby-form-field>
+        }
+        @if (cfg().featureSettings) {
+          <app-user-view-menu #userMenu [columnChoice]="false" [class.hidden]="!userMenu.any()"></app-user-view-menu>
+        }
+        @if (hasPanelContent() && showSummary() && panelCollapsed()) {
+          <button kirby-button class="panel-toggle icon-only" attentionLevel="2" aria-label="Vis summering" title="Vis summering" [showIconOnly]="true" (click)="panelCollapsed.set(false)">
+            <app-sf-icon name="sidebar-right" [size]="24" style="color: var(--kirby-black-contrast)"></app-sf-icon>
+          </button>
+        }
+        @if (hasFilters()) {
+          <div class="filter-row" role="group" aria-label="Aktive filtre">
+            @for (f of activeFilters(); track f.key) {
+              <span class="chip">
+                @if (f.count > 1) {
+                  <kirby-badge size="md" themeColor="white" [attr.aria-label]="f.count + ' valg'">{{ f.count }}</kirby-badge>
+                }
+                <span class="chip-label">{{ f.label }}</span>
+                <button type="button" class="chip-close" [attr.aria-label]="'Fjern filter på ' + f.label" (click)="clearFilter(f.key)">
+                  <kirby-icon name="close"></kirby-icon>
+                </button>
+              </span>
+            }
+            <button kirby-button size="sm" attentionLevel="3" (click)="clearAllFilters()">
+              <kirby-icon name="unsubscribe"></kirby-icon>
+              Ryd alle filtre
+            </button>
+          </div>
+        }
+      </div>
+      <ng-container *ngTemplateOutlet="listTpl"></ng-container>
+    </div>
+
+    @if (bulkOpen()) {
+      <aside class="inline-panel" animate.enter="inline-in" animate.leave="inline-out" aria-label="Summering af valgte posteringer">
+        @if (showSummary()) {
+          <app-transactions-summary
+            [transactions]="selectedRows()"
+            [variant]="cfg().container"
+            (collapse)="panelCollapsed.set(true)"
+            (closed)="toggleAll(false)"
+          ></app-transactions-summary>
+        } @else if (detailRow(); as d) {
+          <app-transaction-detail [transaction]="d" [variant]="cfg().container" (closed)="detailId.set(null)"></app-transaction-detail>
+        }
+      </aside>
+    }
+  </div>
+</ng-template>
+
+@if (cfg().container !== 'canvas') {
+  <kirby-card class="table-card" [variant]="cfg().container === 'stroked-card' ? 'outlined' : 'elevated'">
+    <ng-container *ngTemplateOutlet="stageTpl"></ng-container>
+  </kirby-card>
+} @else {
+  <ng-container *ngTemplateOutlet="stageTpl"></ng-container>
+}

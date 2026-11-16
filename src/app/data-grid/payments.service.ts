@@ -13,9 +13,11 @@ export class PaymentsService {
   readonly payments = signal<Payment[]>(createPayments());
   /** Betalingen, der vises på en ny side (detaljevisning 'Ny side'). */
   readonly pageDetailId = signal<number | null>(null);
+  /** Betalinger, der kun vises i en leverance, så detaljevisningen kan finde dem */
+  readonly extra = signal<Payment[]>([]);
 
   get(id: number | undefined): Payment | undefined {
-    return this.payments().flatMap((p) => [p, ...(p.children ?? [])]).find((p) => p.id === id);
+    return [...this.payments(), ...this.extra()].flatMap((p) => [p, ...(p.children ?? [])]).find((p) => p.id === id);
   }
 
   approve(p: Payment) {
