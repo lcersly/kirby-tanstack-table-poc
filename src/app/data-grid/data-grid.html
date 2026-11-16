@@ -67,16 +67,32 @@
       </div>
 
       <kirby-page
-        [toolbarTitle]="detail()?.recipient ?? 'Godkend betalinger'"
+        [toolbarTitle]="isTransactions() ? txs.account().name : (detail()?.recipient ?? 'Godkend betalinger')"
         [hideBackButton]="!detail()"
         defaultBackHref="/"
         (backButtonClick)="closeDetail()"
         maxWidth="full"
       >
         <kirby-header
-          [title]="detail()?.recipient ?? 'Godkend betalinger'"
-          [subtitle1]="detail() ? formatAmount(detail()!.amount) + ' ' + detail()!.currency + ' · ' + formatDate(detail()!.date) : null"
+          class="data-header"
+          [title]="isTransactions() ? txs.account().name : (detail()?.recipient ?? 'Godkend betalinger')"
+          [value]="isTransactions() ? formatAmount(txs.account().balance) : null"
+          [valueUnit]="isTransactions() ? txs.account().currency : null"
+          [subtitle1]="isTransactions() ? 'Beløb til rådighed ' + formatAmount(txs.account().balance + txs.account().credit) + ' ' + txs.account().currency : (detail() ? formatAmount(detail()!.amount) + ' ' + detail()!.currency + ' · ' + formatDate(detail()!.date) : null)"
+          [subtitle2]="isTransactions() ? txs.account().owner + ' · ' + txs.account().number : null"
         >
+          <ng-template kirbyHeaderTitleActionIcon>
+            @if (isTransactions()) {
+              <kirby-menu [buttonSize]="ButtonSize.XS" aria-label="Skift konto">
+                <button kirby-button size="xs" attentionLevel="3" aria-label="Skift konto">
+                  <kirby-icon name="arrow-down"></kirby-icon>
+                </button>
+                @for (a of txs.accounts; track a.id) {
+                  <kirby-item [selected]="a.id === txs.accountId()" (click)="txs.accountId.set(a.id)">{{ a.name }}</kirby-item>
+                }
+              </kirby-menu>
+            }
+          </ng-template>
           <ng-template kirbyHeaderActions>
             @if (detail(); as p) {
               <kirby-action-group>
@@ -88,7 +104,7 @@
                 </button>
                 <button kirby-button attentionLevel="3" [disabled]="!canEdit(p)">Rediger</button>
               </kirby-action-group>
-            } @else {
+            } @else if (!showDeliveries()) {
               <!-- [OPEN POINT: hvad Godkend og mere-menuen gør på listesiden] -->
               <kirby-action-group>
                 <button kirby-button attentionLevel="1">Godkend alle</button>
@@ -100,7 +116,42 @@
           </ng-template>
         </kirby-header>
         <kirby-page-content>
-          <app-payments-table></app-payments-table>
+          @if (tableConfig.config().dataset === 'empty') {
+            <!-- [OPEN POINT: Kirby har ingen separat message state med decoration; bruger kirby-empty-state med ikonet swap] -->
+            <kirby-card class="empty-card">
+              <kirby-empty-state iconName="swap" title="Ingen betalinger" subtitle="Der er ingen betalinger, på de konti, du har adgang til.">
+                <p class="kirby-text-xsmall empty-help">Kontakt din administrator for flere oplysninger</p>
+                <button kirby-button attentionLevel="1">Opret betaling</button>
+              </kirby-empty-state>
+            </kirby-card>
+          } @else if (tableConfig.config().dataset === 'error') {
+            <kirby-card class="empty-card">
+              <kirby-empty-state title="Betalinger kan ikke hentes" subtitle="Prøv igen senere"></kirby-empty-state>
+            </kirby-card>
+          } @else if (tableConfig.config().dataset === 'transactions') {
+            <!-- [OPEN POINT: filtre, detaljevisning, samlet summering, cellemarkering, fastlåste kolonner og deling er ikke med i kontobevægelser endnu] -->
+            <app-transactions-table></app-transactions-table>
+          } @else {
+            <kirby-tab-navigation
+              class="payments-tabs"
+              [class.on-canvas]="tableConfig.config().container === 'canvas'"
+              aria-label="Betalinger og leverancer"
+              [selectedIndex]="paymentsTab()"
+              (selectedIndexChange)="paymentsTab.set($event)"
+            >
+              <kirby-tab-navigation-item label="Betalinger" id="tab-betalinger" aria-controls="panel-betalinger"></kirby-tab-navigation-item>
+              <kirby-tab-navigation-item label="Leverancer" id="tab-leverancer" aria-controls="panel-leverancer"></kirby-tab-navigation-item>
+            </kirby-tab-navigation>
+            @if (paymentsTab() === 0) {
+              <div role="tabpanel" id="panel-betalinger" aria-labelledby="tab-betalinger">
+                <app-payments-table></app-payments-table>
+              </div>
+            } @else {
+              <div role="tabpanel" id="panel-leverancer" aria-labelledby="tab-leverancer">
+                <app-deliveries></app-deliveries>
+              </div>
+            }
+          }
         </kirby-page-content>
       </kirby-page>
     </main>

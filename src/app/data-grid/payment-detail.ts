@@ -1,12 +1,14 @@
-import { Component, ElementRef, EventEmitter, HostBinding, Input, OnChanges, Output, inject } from '@angular/core';
+import { signal, Component, DestroyRef, ElementRef, EventEmitter, HostBinding, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
+import { CardComponent, CardHeaderComponent } from '@kirbydesign/designsystem/card';
 import { ButtonComponent, ButtonSize } from '@kirbydesign/designsystem/button';
 import { HeaderComponent, HeaderActionsDirective } from '@kirbydesign/designsystem/header';
 import { SectionHeaderComponent } from '@kirbydesign/designsystem/section-header';
 import { FlagComponent } from '@kirbydesign/designsystem/flag';
 import { IconComponent } from '@kirbydesign/designsystem/icon';
 import { ItemComponent } from '@kirbydesign/designsystem/item';
+import { ListComponent, ListItemTemplateDirective } from '@kirbydesign/designsystem/list';
 import { MenuComponent } from '@kirbydesign/designsystem/menu';
-import { COMPONENT_PROPS } from '@kirbydesign/designsystem/modal';
+import { COMPONENT_PROPS, ModalController } from '@kirbydesign/designsystem/modal';
 import { PageTitleComponent } from '@kirbydesign/designsystem/page';
 import {
   CHECK_COLORS,
@@ -20,18 +22,34 @@ import {
   formatAmount,
   formatDate,
   paymentDetails,
+  Payee,
+  Payment,
   PaymentStatus,
+  RecipientCheck,
+  worstCheck,
 } from './payments';
 import { PaymentsService } from './payments.service';
-import { Container, Density } from './table-config';
+import { PayeeCheckDialogComponent } from './payee-check-dialog';
+import { Container, Density, TableConfigService } from './table-config';
 
 /** panel = inline eller sidepanel, modal = Kirby-modal, page = egen side (headeren ligger i Kirby-siden) */
 export type DetailPresentation = 'panel' | 'modal' | 'page';
 
 /** Detaljevisning af en betaling. Grupperne vises som kort, der følger tabellens ramme (canvas, hævet eller optegnet kort). */
+const MODAL_HEIGHTS: Record<RecipientCheck, string> = {
+  Match: '500px',
+  'Tæt match': '610px',
+  'Intet match': '720px',
+  'Ikke muligt': '540px',
+  'Anden udbyder': '540px',
+  'Modtagertjek fravalgt': '500px',
+};
+
 @Component({
   selector: 'app-payment-detail',
   imports: [
+    CardComponent,
+    CardHeaderComponent,
     HeaderActionsDirective,
     HeaderComponent,
     SectionHeaderComponent,
@@ -39,6 +57,8 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
     FlagComponent,
     IconComponent,
     ItemComponent,
+    ListComponent,
+    ListItemTemplateDirective,
     MenuComponent,
     PageTitleComponent,
   ],
@@ -48,9 +68,9 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
         <kirby-page-title>Betaling</kirby-page-title>
       }
       @if (presentation !== 'page') {
-        <header>
           @if (presentation === 'panel') {
-            <div class="top-row">
+            <div class="toolbar" [class.scrolled]="scrolled()">
+              <span class="toolbar-title kirby-text-bold" [class.visible]="titleHidden()">{{ p.recipient }}</span>
               <button
                 kirby-button
                 class="dismiss"
@@ -63,6 +83,7 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
               </button>
             </div>
           }
+        <header>
           <kirby-header
             class="single-column"
             [title]="p.recipient"
@@ -89,6 +110,15 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
         </header>
       }
 
+      @if (p.note) {
+        <section class="group">
+          <kirby-card class="note-card" [class.outlined]="outlined">
+            <kirby-card-header flagged="warning" title="Bemærkning"></kirby-card-header>
+            <p class="note-text">{{ p.note }}</p>
+          </kirby-card>
+        </section>
+      }
+
       <section class="group">
         <div class="group-card approvers">
           <kirby-item [selectable]="true" disclosure="arrow-more">
@@ -99,17 +129,57 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
       </section>
 
       <section class="group">
-        <div class="group-card match">
-          <div class="match-title" [class]="checkColor[p.recipientCheck]">{{ p.recipientCheck }}</div>
+        <kirby-card
+          class="match"
+          [class.outlined]="outlined"
+          [class.clickable]="!p.payees"
+          [attr.role]="p.payees ? null : 'button'"
+          [attr.tabindex]="p.payees ? null : 0"
+          (click)="!p.payees && openCheck(p)"
+          (keydown.enter)="!p.payees && openCheck(p)"
+        >
+          <kirby-card-header [flagged]="flagLevel(shownCheck(p))" [title]="shownCheck(p)"></kirby-card-header>
           <div class="match-body">
-            <span class="match-icon" [class]="checkColor[p.recipientCheck]">
-              <kirby-icon [name]="checkIcon[p.recipientCheck]"></kirby-icon>
+            <span class="match-icon" [class]="checkColor[shownCheck(p)]">
+              <kirby-icon [name]="checkIcon[shownCheck(p)]"></kirby-icon>
             </span>
-            <span class="match-text">{{ checkText[p.recipientCheck] }}</span>
+            <span class="match-text">{{ p.payees ? payeeText : checkText[shownCheck(p)] }}</span>
             <button kirby-button size="sm" attentionLevel="3">Læs mere</button>
           </div>
-        </div>
+        </kirby-card>
       </section>
+
+      @if (visiblePayees(p); as payees) {
+        <section class="group">
+          <kirby-section-header><h4 heading>{{ payees.length }} lønmodtagere</h4></kirby-section-header>
+          <kirby-list class="group-card payees" [items]="payees" [showDivider]="true" (itemSelect)="openPayee($event)">
+            <ng-template kirbyListItemTemplate let-payee>
+              <div class="payee-row" [class.removing]="removing().has(payee.number)">
+              <kirby-item>
+                <span slot="start" class="match-icon" [class]="payeeColor(payee)">
+                  <kirby-icon [name]="payeeIcon(payee)"></kirby-icon>
+                </span>
+                <div class="payee-text">
+                  <div class="kirby-text-normal">{{ payeeLabel(payee) }}</div>
+                  <div class="payee-detail">Til konto {{ payee.toAccount }}</div>
+                </div>
+                <div slot="end" class="payee-amount">{{ formatAmount(payee.amount) }} DKK</div>
+                <button
+                  slot="end"
+                  kirby-button
+                  attentionLevel="3"
+                  title="Fjern lønmodtager"
+                  aria-label="Fjern lønmodtager"
+                  (click)="$event.stopPropagation(); removePayee(payee)"
+                >
+                  <kirby-icon name="trash"></kirby-icon>
+                </button>
+              </kirby-item>
+              </div>
+            </ng-template>
+          </kirby-list>
+        </section>
+      }
 
       <section class="group">
         <kirby-section-header><h4 heading>Modtager</h4></kirby-section-header>
@@ -156,28 +226,74 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
   `,
   styles: `
     :host {
+      --toolbar-base: var(--kirby-background-color);
       display: block;
       background-color: var(--kirby-background-color);
     }
         // Tabel i hævet kort: detaljerne har kortets farve, og grupperne har canvas-farven uden elevation
-    :host(.variant-card:not(.modal)) {
+    // Tabel på kort: detaljerne er hvide, og alle kort er optegnede (outlined)
+    :host(:is(.variant-card, .variant-stroked-card):not(.modal)) {
+      --toolbar-base: var(--kirby-white);
       background-color: var(--kirby-white);
 
+      --kirby-card-border: 1px solid var(--kirby-color-border-base-quiet, #dadada);
       .group-card {
-        background-color: var(--kirby-background-color);
+        background-color: transparent;
         box-shadow: none;
+        border: 1px solid var(--kirby-color-border-base-quiet, #dadada);
       }
     }
+    .note-text {
+      margin: 0;
+      padding: var(--kirby-spacing-s) var(--kirby-spacing-m);
+    }
     :host(:not(.page)) {
-      padding: var(--kirby-spacing-m);
+      box-sizing: border-box;
+      padding: 0 var(--kirby-spacing-m) var(--kirby-spacing-xxl);
+    }
+    :host(.modal) {
+      padding-top: var(--kirby-spacing-m);
     }
     header {
       margin-bottom: var(--kirby-spacing-s);
     }
-    .top-row {
+    // Værktøjslinjen hæfter sig i toppen af panelets rulleområde; modtagerens navn rykker op i den, når headeren er ude af syne
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 2;
       display: flex;
-      justify-content: flex-end;
-      min-height: 32px;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--kirby-spacing-s);
+      margin: 0 calc(-1 * var(--kirby-spacing-m)) var(--kirby-spacing-xs);
+      background-color: var(--toolbar-base);
+      min-height: var(--kirby-spacing-xxxl);
+      padding: 0 var(--kirby-spacing-s);
+      border-bottom: 1px solid transparent;
+      transition: background-color 50ms linear;
+      &.scrolled {
+        background-color: color-mix(in srgb, var(--kirby-black) 1.1%, var(--toolbar-base));
+        border-bottom-color: var(--kirby-medium);
+        transition-duration: var(--kirby-transition-duration-quick);
+      }
+      @media (min-width: 768px) {
+        min-height: var(--kirby-spacing-xxxxxl);
+        padding: 0 var(--kirby-spacing-m);
+      }
+    }
+    .toolbar-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s;
+      &.visible {
+        opacity: 1;
+        transform: none;
+      }
     }
     .dismiss {
       margin: 0;
@@ -212,24 +328,8 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
       }
       overflow: hidden;
     }
-    .match {
-      padding: 0;
-      overflow: hidden;
-    }
-    .match-title {
-      text-align: center;
-      padding: 2px var(--kirby-spacing-s);
-      background-color: var(--kirby-semi-light);
-
-      &.success {
-        background-color: var(--kirby-success-tint);
-      }
-      &.warning {
-        background-color: var(--kirby-warning-tint);
-      }
-      &.danger {
-        background-color: var(--kirby-danger-tint);
-      }
+    .match.clickable {
+      cursor: pointer;
     }
     .match-body {
       display: flex;
@@ -258,6 +358,35 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
         background-color: var(--kirby-danger-tint);
       }
     }
+    .payees {
+      padding: 0;
+      overflow: hidden;
+    }
+    .payee-row {
+      display: grid;
+      grid-template-rows: 1fr;
+      transition:
+        grid-template-rows 250ms ease,
+        opacity 250ms ease;
+      > * {
+        overflow: hidden;
+      }
+      &.removing {
+        grid-template-rows: 0fr;
+        opacity: 0;
+      }
+    }
+    .payee-text {
+      min-width: 0;
+    }
+    .payee-amount {
+      white-space: nowrap;
+      margin-right: var(--kirby-spacing-xs);
+    }
+    .payee-detail {
+      font-size: var(--kirby-font-size-xs);
+      color: var(--kirby-text-color-semi-dark);
+    }
     .status-detail {
       font-size: var(--kirby-font-size-xs);
       color: var(--kirby-text-color-semi-dark);
@@ -266,9 +395,6 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
     .match-body button[kirby-button] {
       --kirby-button-background-color: var(--kirby-semi-light);
       --kirby-button-color: var(--kirby-black);
-    }
-    :host(.variant-card:not(.modal)) .match-body button[kirby-button] {
-      --kirby-button-background-color: var(--kirby-white);
     }
     .match-text {
       flex: 1;
@@ -301,7 +427,7 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
 
       li {
         padding: var(--kirby-spacing-xs) 0;
-        border-bottom: 1px solid var(--kirby-semi-light);
+        border-bottom: 1px solid var(--kirby-color-border-base-quiet, #dadada);
 
         &:last-child {
           border-bottom: none;
@@ -315,9 +441,31 @@ export type DetailPresentation = 'panel' | 'modal' | 'page';
 })
 export class PaymentDetailComponent implements OnChanges {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  readonly titleHidden = signal(false);
+  readonly scrolled = signal(false);
 
-  ngOnChanges() {
-    // Panelet scroller i en overordnet container, som nulstilles ved nyt valg
+  constructor() {
+    if (this.modalProps) Object.assign(this, this.modalProps);
+    // Scroll-hændelser bobler ikke, så de fanges på dokumentet, uanset hvilken container der ruller
+    const onScroll = (e: Event) => {
+      const el = this.host.nativeElement;
+      const target = e.target as Node;
+      if (!(target instanceof HTMLElement) || !target.contains(el)) return;
+      this.scrolled.set(target.scrollTop > 0);
+      const header = el.querySelector('header kirby-header');
+      const bar = el.querySelector('.toolbar');
+      if (header && bar) this.titleHidden.set(header.getBoundingClientRect().bottom <= bar.getBoundingClientRect().bottom);
+    };
+    document.addEventListener('scroll', onScroll, true);
+    inject(DestroyRef).onDestroy(() => document.removeEventListener('scroll', onScroll, true));
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    // Panelet scroller i en overordnet container, som nulstilles ved nyt valg. Ikke ved første
+    // visning, hvor der intet er at nulstille, så åbningen ikke tvinger browseren til en ekstra opmåling.
+    if (!changes['paymentId'] || changes['paymentId'].firstChange) return;
+    this.titleHidden.set(false);
+    this.scrolled.set(false);
     let el: HTMLElement | null = this.host.nativeElement;
     while (el) {
       if (el.scrollTop) el.scrollTop = 0;
@@ -326,12 +474,84 @@ export class PaymentDetailComponent implements OnChanges {
   }
 
   readonly service = inject(PaymentsService);
+  private readonly modal = inject(ModalController);
+  private readonly tableConfig = inject(TableConfigService);
+  readonly payeeText = 'Der er lønbetalinger uden match mellem modtagers navn og kontoejer';
+
+  readonly removing = signal<Set<string>>(new Set());
+  readonly removed = signal<Set<string>>(new Set());
+
+  visiblePayees(p: Payment): Payee[] | undefined {
+    return p.payees?.filter((x) => !this.removed().has(x.number));
+  }
+
+  flagLevel(check: RecipientCheck) {
+    const color = this.checkColor[check];
+    return color === 'semi-light' ? 'info' : color;
+  }
+
+  shownCheck(p: Payment): RecipientCheck {
+    const list = this.visiblePayees(p);
+    return list?.length ? worstCheck(list.map((x) => x.recipientCheck)) : p.recipientCheck;
+  }
+
+  removePayee(payee: Payee) {
+    this.removing.update((s) => new Set(s).add(payee.number));
+    setTimeout(() => this.removed.update((s) => new Set(s).add(payee.number)), 250);
+  }
+
+  payeeColor(p: Payee) {
+    return this.checkColor[p.recipientCheck];
+  }
+
+  payeeIcon(p: Payee) {
+    return this.checkIcon[p.recipientCheck];
+  }
+
+  payeeLabel(p: Payee) {
+    return this.tableConfig.config().showPayeeNames ? `${p.name} • ${p.number}` : p.number;
+  }
+
+  /** Modtagertjek på en almindelig betaling. Navn og kontoejer må altid vises her. */
+  openCheck(p: Payment) {
+    const check = p.recipientCheck;
+    this.modal.showModal({
+      component: PayeeCheckDialogComponent,
+      flavor: 'modal',
+      size: 'medium',
+      customHeight: check === 'Intet match' ? '660px' : MODAL_HEIGHTS[check],
+      collapseTitle: false,
+      componentProps: {
+        payee: {
+          number: '',
+          name: p.recipient,
+          registeredOwner: check === 'Match' ? p.recipient : `${p.recipient} Holm`,
+          toAccount: p.toAccount,
+          amount: p.amount,
+          recipientCheck: check,
+        } satisfies Payee,
+        showNames: true,
+        isPayee: false,
+      },
+    });
+  }
+
+  openPayee(payee: Payee) {
+    this.modal.showModal({
+      component: PayeeCheckDialogComponent,
+      flavor: 'modal',
+      size: 'medium',
+      customHeight:
+        payee.recipientCheck === 'Intet match' && !this.tableConfig.config().showPayeeNames
+          ? '780px'
+          : MODAL_HEIGHTS[payee.recipientCheck],
+      collapseTitle: false,
+      componentProps: { payee, showNames: this.tableConfig.config().showPayeeNames },
+    });
+  }
   // Når komponenten åbnes i en Kirby-modal, leveres værdierne som componentProps
   private readonly modalProps = inject<Partial<PaymentDetailComponent>>(COMPONENT_PROPS, { optional: true });
 
-  constructor() {
-    if (this.modalProps) Object.assign(this, this.modalProps);
-  }
 
   @HostBinding('class') get hostClass() {
     return `variant-${this.variant}${this.presentation === 'page' ? ' page' : ''}${this.presentation === 'modal' ? ' modal' : ''}`;
@@ -340,6 +560,9 @@ export class PaymentDetailComponent implements OnChanges {
   @Input() paymentId?: number;
   @Input() presentation: DetailPresentation = 'panel';
   @Input() variant: Container = 'canvas';
+  get outlined() {
+    return this.variant !== 'canvas' && this.presentation !== 'modal';
+  }
   /** Rækkehøjden i tabellen; kompakt og standard giver mindre tekst i detaljerne. */
   @Input() density: Density = 'standard';
 

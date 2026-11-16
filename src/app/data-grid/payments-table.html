@@ -341,17 +341,12 @@
                     }
                   }
                   @case ('attachments') {
-                    <span class="attach-icons" [attr.title]="p.attachments === 'Ingen' ? null : p.attachments">
-                      @if (p.attachments === 'Bilag' || p.attachments === 'Bilag og note') {
-                        <kirby-icon name="attach" aria-hidden="true"></kirby-icon>
-                      }
-                      @if (p.attachments === 'Note' || p.attachments === 'Bilag og note') {
+                    @if (p.attachments === 'Note') {
+                      <span class="attach-icons" title="Note">
                         <kirby-icon name="note" aria-hidden="true"></kirby-icon>
-                      }
-                      @if (p.attachments !== 'Ingen') {
-                        <span class="sr-only">{{ p.attachments }}</span>
-                      }
-                    </span>
+                        <span class="sr-only">Note</span>
+                      </span>
+                    }
                   }
                   @case ('status') {
                     <ng-container *ngTemplateOutlet="statusTpl; context: { $implicit: p }"></ng-container>
@@ -419,7 +414,43 @@
     <div class="main">
       @if (showToolbar()) {
       <div class="toolbar" role="toolbar" aria-label="Hurtigfiltre og søgning">
+        <div class="row row-tools">
+        @if (cfg().featureSearch) {
+          <kirby-form-field class="search">
+            <input
+              kirby-input
+              type="search"
+              size="md"
+              placeholder="Søg"
+              aria-label="Søg i alle kolonner"
+              [value]="search()"
+              (input)="search.set($any($event.target).value)"
+            />
+            <kirby-icon kirby-affix="prefix" name="search"></kirby-icon>
+          </kirby-form-field>
+        }
+        @if (cfg().featureSettings) {
+          <app-user-view-menu #userMenu [class.hidden]="!userMenu.any()"></app-user-view-menu>
+        }
+        @if (cfg().featureShare) {
+          <kirby-menu class="share-menu" placement="bottom-end" [buttonSize]="ButtonSize.MD">
+            <button kirby-button attentionLevel="3" aria-label="Del data" title="Del data">
+              <kirby-icon name="share"></kirby-icon>
+            </button>
+            <kirby-item (click)="exportAllExcel()">Eksporter til Excel</kirby-item>
+            <kirby-item (click)="exportAllCsv()">Eksporter til CSV</kirby-item>
+            <kirby-item (click)="shareLink()">Del link</kirby-item>
+            <kirby-item (click)="print()">Udskriv</kirby-item>
+          </kirby-menu>
+        }
+        @if (bulkOpen() && panelCollapsed()) {
+          <button kirby-button class="panel-toggle icon-only" attentionLevel="2" aria-label="Vis summering" title="Vis summering" [showIconOnly]="true" (click)="panelCollapsed.set(false)">
+            <app-sf-icon name="sidebar-right" [size]="24" style="color: var(--kirby-black-contrast)"></app-sf-icon>
+          </button>
+        }
+        </div>
         @if (cfg().featureQuick) {
+          <div class="row row-quick">
           <kirby-segmented-control
             class="quick"
             mode="chip"
@@ -428,11 +459,10 @@
             [selectedIndex]="quickIndex()"
             (selectedIndexChange)="setQuick($event)"
           ></kirby-segmented-control>
+          </div>
         }
         @if (savedFilters().length) {
-          @if (cfg().featureQuick) {
-            <span class="vdivider" aria-hidden="true"></span>
-          }
+          <div class="row row-saved">
           @if (visibleSaved().length) {
             <div class="saved-chips" role="group" aria-label="Gemte filtre">
               @for (saved of visibleSaved(); track saved.id) {
@@ -470,33 +500,7 @@
               </button>
             }
           }
-        }
-        @if (cfg().featureSearch) {
-          <kirby-form-field class="search">
-            <input
-              kirby-input
-              type="search"
-              size="md"
-              placeholder="Søg"
-              aria-label="Søg i alle kolonner"
-              [value]="search()"
-              (input)="search.set($any($event.target).value)"
-            />
-            <kirby-icon kirby-affix="prefix" name="search"></kirby-icon>
-          </kirby-form-field>
-        }
-        @if (cfg().featureSettings) {
-          <app-user-view-menu #userMenu [class.hidden]="!userMenu.any()"></app-user-view-menu>
-        }
-        @if (cfg().featureShare) {
-          <kirby-menu class="share-menu" placement="bottom-end" [buttonSize]="ButtonSize.MD">
-            <button kirby-button attentionLevel="3" aria-label="Del data" title="Del data">
-              <kirby-icon name="share"></kirby-icon>
-            </button>
-            <kirby-item (click)="exportAllExcel()">Eksporter til Excel</kirby-item>
-            <kirby-item (click)="exportAllCsv()">Eksporter til CSV</kirby-item>
-            <kirby-item (click)="shareLink()">Del link</kirby-item>
-          </kirby-menu>
+          </div>
         }
         @if (activeFilters().length) {
           <div class="filter-row" role="group" aria-label="Aktive filtre">
@@ -550,14 +554,17 @@
     @if (inlineOpen()) {
       <aside
         class="inline-panel"
+        [style.flex-basis.px]="panelWidth()"
+        [style.width.px]="panelWidth()"
         animate.enter="inline-in"
         animate.leave="inline-out"
         aria-label="Detaljer om betaling"
       >
-        @if (bulkOpen()) {
+        @if (bulkOpen() && !panelCollapsed()) {
           <app-bulk-summary
             [payments]="selectedPayments()"
             [variant]="cfg().container"
+            (collapse)="panelCollapsed.set(true)"
             (closed)="toggleAll(false)"
             (approve)="approveIds($event)"
           ></app-bulk-summary>

@@ -1,6 +1,6 @@
 export type PaymentStatus =
-  | 'Mangler 1. godkendelse'
-  | 'Mangler 2. godkendelse'
+  | 'Afventer 1. godkendelse'
+  | 'Afventer 2. godkendelse'
   | 'Fejl'
   | 'Afvist'
   | 'Gennemført'
@@ -17,6 +17,18 @@ export type RecipientCheck =
   | 'Anden udbyder'
   | 'Modtagertjek fravalgt';
 
+/** En lønmodtager i en lønbetaling */
+export interface Payee {
+  number: string;
+  /** Navn, som afsender har indtastet */
+  name: string;
+  /** Kontoejers navn, som banken har registreret */
+  registeredOwner: string;
+  toAccount: string;
+  amount: number;
+  recipientCheck: RecipientCheck;
+}
+
 export interface Payment {
   id: number;
   date: string;
@@ -29,9 +41,13 @@ export interface Payment {
   fromAccount: string;
   accountOwner: string;
   reference: string;
-  attachments: 'Ingen' | 'Bilag' | 'Note' | 'Bilag og note';
+  attachments: 'Ingen' | 'Note';
+  /** Bemærkning, når betalingen har en note. */
+  note: string;
   status: PaymentStatus;
   recipientCheck: RecipientCheck;
+  /** Lønbetaling: de enkelte lønmodtagere. */
+  payees?: Payee[];
   /** Samlepostering: de betalinger, rækken samler. */
   children?: Payment[];
   /** Enkeltpostering i en samlepostering: id på samleposteringen. */
@@ -39,8 +55,8 @@ export interface Payment {
 }
 
 export const ACTIONABLE_STATUSES: PaymentStatus[] = [
-  'Mangler 1. godkendelse',
-  'Mangler 2. godkendelse',
+  'Afventer 1. godkendelse',
+  'Afventer 2. godkendelse',
   'Klar',
   'Afventer din kontrol',
 ];
@@ -60,7 +76,7 @@ export function canEdit(p: Payment): boolean {
 }
 
 export function nextStatusAfterApproval(status: PaymentStatus): PaymentStatus {
-  return status === 'Mangler 1. godkendelse' ? 'Mangler 2. godkendelse' : 'Afventer bankens kontrol';
+  return status === 'Afventer 1. godkendelse' ? 'Afventer 2. godkendelse' : 'Afventer bankens kontrol';
 }
 
 const OWNERS = [
@@ -100,10 +116,10 @@ const TYPES: { type: string; subtypes: string[]; currencies: string[] }[] = [
 ];
 
 const STATUSES: PaymentStatus[] = [
-  'Mangler 1. godkendelse',
-  'Mangler 1. godkendelse',
-  'Mangler 2. godkendelse',
-  'Mangler 2. godkendelse',
+  'Afventer 1. godkendelse',
+  'Afventer 1. godkendelse',
+  'Afventer 2. godkendelse',
+  'Afventer 2. godkendelse',
   'Klar',
   'Afventer din kontrol',
   'Afventer bankens kontrol',
@@ -125,7 +141,51 @@ const CHECKS: RecipientCheck[] = [
   'Anden udbyder',
 ];
 
+const NOTE_AUTHORS = ['Caroline Andersen', 'Mikkel Hansen', 'Sofie Nielsen'];
 const REFERENCES = ['Faktura 10482', 'ERP-7731', 'Bilag 2024-118', 'PO-55120', 'Faktura 10517', 'Løn okt.', '', 'Bilag 2024-131'];
+
+// [OPEN POINT: Rækkefølgen for "det værste resultat" af modtagertjek er foreløbig gættet]
+const CHECK_SEVERITY: RecipientCheck[] = [
+  'Intet match',
+  'Tæt match',
+  'Ikke muligt',
+  'Anden udbyder',
+  'Modtagertjek fravalgt',
+  'Match',
+];
+
+export function worstCheck(checks: RecipientCheck[]): RecipientCheck {
+  return checks.reduce((w, c) => (CHECK_SEVERITY.indexOf(c) < CHECK_SEVERITY.indexOf(w) ? c : w), 'Match' as RecipientCheck);
+}
+
+const PAYEE_NAMES: [string, string][] = [
+  ['Freja Jørgensen', 'Freja Sahl Jørgensen'],
+  ['Mads Kristensen', 'Mads Kristensen'],
+  ['Ida Mortensen', 'Ida Mortensen'],
+  ['Oliver Poulsen', 'Oliver Poulsen'],
+  ['Emma Holst', 'Emma Holst Larsen'],
+  ['Noah Bruun', 'Noah Bruun'],
+  ['Clara Vestergaard', 'Clara Winther'],
+  ['Victor Lund', 'Victor Lund'],
+];
+const PAYEE_CHECKS: RecipientCheck[] = ['Match', 'Tæt match', 'Match', 'Match', 'Tæt match', 'Match', 'Intet match', 'Match'];
+
+function createPayees(i: number, total: number): Payee[] {
+  const n = 4 + (i % 4);
+  const each = Math.floor((total / n) * 100) / 100;
+  return Array.from({ length: n }, (_, k) => {
+    const [name, owner] = PAYEE_NAMES[(i + k) % PAYEE_NAMES.length];
+    const check = PAYEE_CHECKS[(i + k * 3) % PAYEE_CHECKS.length];
+    return {
+      number: String(k + 1).padStart(3, '0'),
+      name,
+      registeredOwner: check === 'Match' ? name : owner === name ? `${name} Holm` : owner,
+      toAccount: `${5000 + ((i * 11 + k * 7) % 90)} ${String(1000000 + (i * 7919 + k * 90001) % 9000000)}`,
+      amount: k === n - 1 ? Math.round((total - each * (n - 1)) * 100) / 100 : each,
+      recipientCheck: check,
+    };
+  });
+}
 
 // Deterministisk fiktiv data, så prototypen ser ens ud hver gang
 export function createPayments(count = 200): Payment[] {
@@ -143,11 +203,14 @@ export function createPayments(count = 200): Payment[] {
         : t.type === 'Indbetalingskort'
           ? `${t.subtypes[i % t.subtypes.length]} ${String(10000000 + i * 12347).slice(0, 8)}`
           : `${String(3000 + ((i * 37) % 1500)).padStart(4, '0')} ${String(1000000 + i * 90001).padStart(10, '0')}`;
+    const hasNote = [3, 5].includes((i * 3) % 7);
+    const amount = Math.round((((i * 7919) % 480000) + 1250) * 100) / 100 + (i % 4) * 0.5;
+    const payees = t.type === 'Løn' ? createPayees(i, amount) : undefined;
     payments.push({
       id: i + 1,
       date: `2026-10-${String(day).padStart(2, '0')}`,
       recipient: RECIPIENTS[(i * 5) % RECIPIENTS.length],
-      amount: Math.round((((i * 7919) % 480000) + 1250) * 100) / 100 + (i % 4) * 0.5,
+      amount,
       currency,
       type: t.type,
       subtype: t.subtypes[i % t.subtypes.length],
@@ -155,9 +218,15 @@ export function createPayments(count = 200): Payment[] {
       fromAccount: owner.accounts[i % owner.accounts.length],
       accountOwner: owner.name,
       reference: REFERENCES[i % REFERENCES.length],
-      attachments: (['Ingen', 'Bilag', 'Ingen', 'Note', 'Ingen', 'Bilag og note', 'Ingen'] as const)[(i * 3) % 7],
+      attachments: hasNote ? 'Note' : 'Ingen',
+      note: hasNote ? `Betaling redigeret af ${NOTE_AUTHORS[i % NOTE_AUTHORS.length]} ${(i % 27) + 1}. november 2026` : '',
       status: completed ? 'Gennemført' : STATUSES[(i * 5) % STATUSES.length],
-      recipientCheck: t.type === 'Indbetalingskort' || t.type === 'Løn' ? 'Modtagertjek fravalgt' : CHECKS[i % CHECKS.length],
+      recipientCheck: payees
+        ? worstCheck(payees.map((x) => x.recipientCheck))
+        : t.type === 'Indbetalingskort'
+          ? 'Modtagertjek fravalgt'
+          : CHECKS[i % CHECKS.length],
+      payees,
     });
   }
   // Tre samlepostering som kan foldes ud. De samler betalinger med samme dato og valuta
@@ -187,8 +256,8 @@ export function createPayments(count = 200): Payment[] {
 export type FlagColor = 'success' | 'warning' | 'danger' | 'semi-light';
 
 export const STATUS_COLORS: Record<PaymentStatus, FlagColor> = {
-  'Mangler 1. godkendelse': 'warning',
-  'Mangler 2. godkendelse': 'semi-light',
+  'Afventer 1. godkendelse': 'semi-light',
+  'Afventer 2. godkendelse': 'semi-light',
   Fejl: 'warning',
   Afvist: 'warning',
   Gennemført: 'success',
@@ -200,8 +269,8 @@ export const STATUS_COLORS: Record<PaymentStatus, FlagColor> = {
 
 /** Kun statusser, der kræver brugerens handling eller opmærksomhed, vises som flag; resten vises som detalje. */
 export const STATUS_NEEDS_ATTENTION: ReadonlySet<PaymentStatus> = new Set<PaymentStatus>([
-  'Mangler 1. godkendelse',
-  'Mangler 2. godkendelse',
+  'Afventer 1. godkendelse',
+  'Afventer 2. godkendelse',
   'Afventer din kontrol',
   'Fejl',
   'Afvist',
@@ -279,7 +348,7 @@ export function paymentDetails(p: Payment): PaymentDetails {
   const activities: DetailActivity[] = [
     { title: 'Oprettet', by: PEOPLE[p.id % PEOPLE.length], date: created },
   ];
-  if (p.status !== 'Mangler 1. godkendelse') {
+  if (p.status !== 'Afventer 1. godkendelse') {
     activities.push({ title: 'Første godkendelse', by: PEOPLE[(p.id + 1) % PEOPLE.length], date: '2026-10-05' });
   }
   if (['Klar', 'Afventer bankens kontrol', 'Gennemført'].includes(p.status)) {

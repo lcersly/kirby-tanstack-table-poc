@@ -1,8 +1,9 @@
 import { Component, input } from '@angular/core';
 
-export type SfIconName = 'filter' | 'pin' | 'fit' | 'fit-all' | 'arrow-up' | 'arrow-down' | 'play' | 'bookmark';
+export type SfIconName = 'filter' | 'pin' | 'fit' | 'fit-all' | 'arrow-up' | 'arrow-down' | 'play' | 'bookmark' | 'sidebar-right';
 
 const PATHS: Record<SfIconName, string> = {
+  'sidebar-right': 'M5.5 4.5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2ZM14.5 4.5v15',
   filter: 'M4 7h16M7 12h10M10 17h4',
   pin: 'M9 3.75h6l-.75 5.5 2.75 3H7l2.75-3L9 3.75ZM12 12.25v8',
   fit: 'M4 5v14M20 5v14M6.5 12h4M8.5 10l2 2-2 2M17.5 12h-4M15.5 10l-2 2 2 2',
@@ -14,7 +15,7 @@ const PATHS: Record<SfIconName, string> = {
 };
 
 /**
- * Ikoner tegnet i stil med SF Symbols (line.3.horizontal.decrease, pin, arrow.up/down m.fl.), som Kirby ikke har.
+ * Ikoner tegnet i stil med SF Symbols (line.3.horizontal.decrease, sidebar.right, pin, arrow.up/down m.fl.), som Kirby ikke har.
  * [OPEN POINT: Udskift med de eksporterede symboler fra SF Symbols-appen, når de er godkendt til brug]
  */
 @Component({

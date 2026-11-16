@@ -48,3 +48,12 @@ kirby-popover {
   --kirby-content-border-top-radius: 0;
   --kirby-content-border-bottom-radius: 0;
 }
+
+// Modal, der fylder hele skærmen (bruges til betalinger i en leverance)
+ion-modal.kirby-modal.fullscreen-modal {
+  --width: 100vw !important;
+  --height: 100vh !important;
+  --max-width: 100vw !important;
+  --max-height: 100vh !important;
+  --border-radius: 0 !important;
+}

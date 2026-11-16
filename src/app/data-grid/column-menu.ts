@@ -309,7 +309,7 @@ const VALUES_PER_PAGE = 6;
       box-shadow: 0 4px 16px rgb(0 0 0 / 16%);
     }
     kirby-item:not(:last-child) {
-      border-bottom: 1px solid var(--kirby-semi-light);
+      border-bottom: 1px solid var(--kirby-color-border-base-quiet, #dadada);
     }
     .handle {
       display: inline-flex;
@@ -380,7 +380,7 @@ const VALUES_PER_PAGE = 6;
     .menu-divider {
       height: 1px;
       margin: 0;
-      background-color: var(--kirby-semi-light);
+      background-color: var(--kirby-background-color);
     }
     .search {
       display: block;
@@ -395,7 +395,7 @@ const VALUES_PER_PAGE = 6;
       align-items: center;
       justify-content: space-between;
       padding: var(--kirby-spacing-xxs) var(--kirby-spacing-xs);
-      border-bottom: 1px solid var(--kirby-semi-light);
+      border-bottom: 1px solid var(--kirby-color-border-base-quiet, #dadada);
       color: var(--kirby-text-color-semi-dark);
     }
     .step {
