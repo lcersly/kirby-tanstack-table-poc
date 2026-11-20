@@ -65,6 +65,7 @@ export type ActionsForce = 'auto' | 'icon' | 'full';
 export type CheckStyle = 'flag' | 'avatar';
 export type DetailMode = 'none' | 'modal' | 'side-modal' | 'side-nonmodal' | 'inline' | 'page';
 export type Container = 'canvas' | 'card' | 'stroked-card';
+export type DeliveryCard = 'outlined' | 'elevated';
 export type CheckboxSize = 'md' | 'xs';
 export type CurrencyStyle = 'flag' | 'code';
 export type LoadingMode = 'all' | 'paging' | 'lazy' | 'virtual';
@@ -126,6 +127,10 @@ export interface TableConfig {
   featureRowActions: boolean;
   /** Brugeren må se lønmodtageres navne. Ellers vises kun løbenummer. */
   showPayeeNames: boolean;
+  /** Vis betalinger, hvor modtagers bank ikke understøtter modtagertjek (Anden udbyder). */
+  showOtherProvider: boolean;
+  /** Hvordan leverancekortene vises. */
+  deliveryCard: DeliveryCard;
 }
 
 /** Brugerens egne valg, som ligger oven på udviklerindstillingerne */
@@ -175,6 +180,8 @@ export const DEFAULT_CONFIG: TableConfig = {
   featureFilter: true,
   featureRowActions: true,
   showPayeeNames: false,
+  showOtherProvider: false,
+  deliveryCard: 'elevated',
 };
 
 export type PresetId = 'simple' | 'complex' | 'mvp';

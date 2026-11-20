@@ -12,17 +12,14 @@ import { ItemComponent } from '@kirbydesign/designsystem/item';
 import { Container } from './table-config';
 import { CHECK_COLORS, CHECK_ICONS, Payment, RecipientCheck, accountCurrency, canApprove, canStop, convert, formatAmount } from './payments';
 
-type CheckGroupKey = 'match' | 'close' | 'none' | 'other';
+type CheckGroupKey = RecipientCheck;
 
-const CHECK_GROUPS: { key: CheckGroupKey; label: string; check?: RecipientCheck }[] = [
-  { key: 'match', label: 'Match', check: 'Match' },
-  { key: 'close', label: 'Tæt match', check: 'Tæt match' },
-  { key: 'none', label: 'Intet match', check: 'Intet match' },
-  { key: 'other', label: 'Øvrige' },
-];
+const CHECK_GROUPS: { key: CheckGroupKey; label: string; check: RecipientCheck }[] = (
+  ['Match', 'Tæt match', 'Ikke muligt', 'Anden udbyder', 'Modtagertjek fravalgt', 'Intet match'] as const
+).map((check) => ({ key: check, label: check, check }));
 
 function groupOf(p: Payment): CheckGroupKey {
-  return CHECK_GROUPS.find((g) => g.check === p.recipientCheck)?.key ?? 'other';
+  return p.recipientCheck;
 }
 
 interface TotalRow {
@@ -343,7 +340,7 @@ export class BulkSummaryComponent {
 
   wholeAmount = (n: number) => Math.round(n).toLocaleString('da-DK');
   // Match er markeret som standard
-  readonly checked = signal<ReadonlySet<CheckGroupKey>>(new Set<CheckGroupKey>(['match']));
+  readonly checked = signal<ReadonlySet<CheckGroupKey>>(new Set<CheckGroupKey>(['Match', 'Tæt match', 'Ikke muligt', 'Modtagertjek fravalgt']));
 
   /** Kun betalinger i de afkrydsede modtagertjek-grupper indgår i totalerne */
   readonly included = computed(() => this.list().filter((p) => this.checked().has(groupOf(p))));
@@ -351,7 +348,7 @@ export class BulkSummaryComponent {
   readonly totalDkk = computed(() => this.included().reduce((sum, p) => sum + convert(p.amount, p.currency, 'DKK'), 0));
 
   readonly counts = computed(() => {
-    const result: Record<CheckGroupKey, number> = { match: 0, close: 0, none: 0, other: 0 };
+    const result = Object.fromEntries(CHECK_GROUPS.map((g) => [g.key, 0])) as Record<CheckGroupKey, number>;
     for (const p of this.list()) result[groupOf(p)]++;
     return result;
   });
@@ -359,8 +356,8 @@ export class BulkSummaryComponent {
   readonly visibleGroups = computed(() =>
     CHECK_GROUPS.filter((g) => this.counts()[g.key] > 0).map((g) => ({
       ...g,
-      color: g.check ? CHECK_COLORS[g.check] : 'semi-light',
-      icon: g.check ? CHECK_ICONS[g.check] : 'person-blocked',
+      color: CHECK_COLORS[g.check],
+      icon: CHECK_ICONS[g.check],
     })),
   );
 
