@@ -116,11 +116,11 @@ const COPY: Record<RecipientCheck, CheckCopy> = {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: var(--kirby-spacing-l) var(--kirby-spacing-m);
+      padding: var(--kirby-spacing-m);
       text-align: center;
     }
     kirby-flag {
-      margin-top: var(--kirby-spacing-l);
+      margin-top: 0;
     }
     .message {
       display: flex;
@@ -130,7 +130,7 @@ const COPY: Record<RecipientCheck, CheckCopy> = {
     }
     .owner,
     section {
-      margin-top: var(--kirby-spacing-l);
+      margin-top: var(--kirby-spacing-m);
     }
     .disclaimer,
     article > button {

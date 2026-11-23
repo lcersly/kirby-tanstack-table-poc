@@ -1,5 +1,6 @@
 import { signal, Component, DestroyRef, ElementRef, EventEmitter, HostBinding, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
 import { CardComponent, CardHeaderComponent } from '@kirbydesign/designsystem/card';
+import { CheckboxComponent } from '@kirbydesign/designsystem/checkbox';
 import { ButtonComponent, ButtonSize } from '@kirbydesign/designsystem/button';
 import { HeaderComponent, HeaderActionsDirective } from '@kirbydesign/designsystem/header';
 import { SectionHeaderComponent } from '@kirbydesign/designsystem/section-header';
@@ -36,13 +37,15 @@ import { Container, Density, TableConfigService } from './table-config';
 export type DetailPresentation = 'panel' | 'modal' | 'page';
 
 /** Detaljevisning af en betaling. Grupperne vises som kort, der følger tabellens ramme (canvas, hævet eller optegnet kort). */
+const CHECK_ORDER: RecipientCheck[] = ['Match', 'Tæt match', 'Ikke muligt', 'Anden udbyder', 'Modtagertjek fravalgt', 'Intet match'];
+
 const MODAL_HEIGHTS: Record<RecipientCheck, string> = {
-  Match: '500px',
-  'Tæt match': '610px',
-  'Intet match': '720px',
-  'Ikke muligt': '540px',
-  'Anden udbyder': '540px',
-  'Modtagertjek fravalgt': '500px',
+  Match: '450px',
+  'Tæt match': '580px',
+  'Intet match': '690px',
+  'Ikke muligt': '450px',
+  'Anden udbyder': '450px',
+  'Modtagertjek fravalgt': '430px',
 };
 
 @Component({
@@ -50,6 +53,7 @@ const MODAL_HEIGHTS: Record<RecipientCheck, string> = {
   imports: [
     CardComponent,
     CardHeaderComponent,
+    CheckboxComponent,
     HeaderActionsDirective,
     HeaderComponent,
     SectionHeaderComponent,
@@ -97,7 +101,7 @@ const MODAL_HEIGHTS: Record<RecipientCheck, string> = {
             }
             <ng-template kirbyHeaderActions>
               <div class="header-actions">
-                <button kirby-button attentionLevel="1" [disabled]="!canApprove(p)" (click)="service.approve(p)">
+                <button kirby-button attentionLevel="1" [disabled]="!canApproveSelected(p)" (click)="service.approve(p)">
                   Godkend
                 </button>
                 <kirby-menu [buttonSize]="ButtonSize.MD" placement="bottom-start" aria-label="Flere handlinger">
@@ -128,6 +132,42 @@ const MODAL_HEIGHTS: Record<RecipientCheck, string> = {
         </div>
       </section>
 
+      @if (p.payees) {
+        <section class="group">
+          <kirby-section-header>
+            <h4 heading>Modtagertjek</h4>
+            <span detail>Vælg for at godkende</span>
+            <kirby-checkbox
+              slot="end"
+              size="xs"
+              [checked]="allChecked(p)"
+              [indeterminate]="someChecked(p)"
+              (checkedChange)="toggleAll(p, $event)"
+              aria-label="Vælg alle svar"
+            ></kirby-checkbox>
+          </kirby-section-header>
+          <div class="group-card check-groups">
+            @for (g of checkGroups(p); track g.check) {
+              <kirby-item>
+                <span slot="start" class="match-icon" [class]="checkColor[g.check]">
+                  <kirby-icon [name]="checkIcon[g.check]"></kirby-icon>
+                </span>
+                <div class="payee-text">
+                  <div class="kirby-text-normal">{{ g.check }}</div>
+                  <div class="payee-detail">{{ g.count }} {{ g.count === 1 ? 'modtager' : 'modtagere' }} • {{ formatAmount(g.amount) }}</div>
+                </div>
+                <kirby-checkbox
+                  slot="end"
+                  size="xs"
+                  [checked]="!deselected().has(g.check)"
+                  (checkedChange)="toggleCheck(g.check, $event)"
+                  [attr.aria-label]="g.check"
+                ></kirby-checkbox>
+              </kirby-item>
+            }
+          </div>
+        </section>
+      } @else {
       <section class="group">
         <kirby-card
           class="match"
@@ -148,6 +188,7 @@ const MODAL_HEIGHTS: Record<RecipientCheck, string> = {
           </div>
         </kirby-card>
       </section>
+      }
 
       @if (visiblePayees(p); as payees) {
         <section class="group">
@@ -399,6 +440,15 @@ const MODAL_HEIGHTS: Record<RecipientCheck, string> = {
     .match-text {
       flex: 1;
     }
+    .group kirby-section-header kirby-checkbox {
+      // Kirby-checkboksen får bredere plads i sektionsoverskriften end i rækkerne; flyttes, så den flugter.
+      transform: translateX(27px);
+      margin-bottom: var(--kirby-spacing-xxs);
+    }
+    .check-groups {
+      padding: 0;
+      overflow: hidden;
+    }
     dl.group-card {
       display: grid;
       grid-template-columns: minmax(max-content, 1fr) 1.2fr;
@@ -485,6 +535,47 @@ export class PaymentDetailComponent implements OnChanges {
     return p.payees?.filter((x) => !this.removed().has(x.number));
   }
 
+  /** Svar, der er fravalgt til godkendelse. Intet match er fravalgt fra start. */
+  readonly deselected = signal<Set<RecipientCheck>>(new Set<RecipientCheck>(['Intet match']));
+
+  checkGroups(p: Payment) {
+    const groups = new Map<RecipientCheck, { check: RecipientCheck; count: number; amount: number }>();
+    for (const x of this.visiblePayees(p) ?? []) {
+      const g = groups.get(x.recipientCheck) ?? { check: x.recipientCheck, count: 0, amount: 0 };
+      g.count++;
+      g.amount += x.amount;
+      groups.set(x.recipientCheck, g);
+    }
+    return [...groups.values()].sort((a, b) => CHECK_ORDER.indexOf(a.check) - CHECK_ORDER.indexOf(b.check));
+  }
+
+  toggleCheck(check: RecipientCheck, on: boolean) {
+    this.deselected.update((s) => {
+      const n = new Set(s);
+      if (on) n.delete(check);
+      else n.add(check);
+      return n;
+    });
+  }
+
+  allChecked(p: Payment) {
+    return this.checkGroups(p).every((g) => !this.deselected().has(g.check));
+  }
+
+  someChecked(p: Payment) {
+    const n = this.checkGroups(p).filter((g) => !this.deselected().has(g.check)).length;
+    return n > 0 && n < this.checkGroups(p).length;
+  }
+
+  toggleAll(p: Payment, on: boolean) {
+    this.deselected.set(on ? new Set() : new Set(this.checkGroups(p).map((g) => g.check)));
+  }
+
+  /** Godkend er kun mulig, når mindst ét svar er valgt (ved lønbetalinger). */
+  canApproveSelected(p: Payment) {
+    return canApprove(p) && (!p.payees || this.checkGroups(p).some((g) => !this.deselected().has(g.check)));
+  }
+
   flagLevel(check: RecipientCheck) {
     const color = this.checkColor[check];
     return color === 'semi-light' ? 'info' : color;
@@ -519,7 +610,7 @@ export class PaymentDetailComponent implements OnChanges {
       component: PayeeCheckDialogComponent,
       flavor: 'modal',
       size: 'medium',
-      customHeight: check === 'Intet match' ? '660px' : MODAL_HEIGHTS[check],
+      customHeight: check === 'Intet match' ? '600px' : MODAL_HEIGHTS[check],
       collapseTitle: false,
       componentProps: {
         payee: {
@@ -543,7 +634,7 @@ export class PaymentDetailComponent implements OnChanges {
       size: 'medium',
       customHeight:
         payee.recipientCheck === 'Intet match' && !this.tableConfig.config().showPayeeNames
-          ? '780px'
+          ? '750px'
           : MODAL_HEIGHTS[payee.recipientCheck],
       collapseTitle: false,
       componentProps: { payee, showNames: this.tableConfig.config().showPayeeNames },

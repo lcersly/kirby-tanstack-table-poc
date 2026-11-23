@@ -3,15 +3,18 @@ import { Component, ViewChild, computed, inject, signal } from '@angular/core';
 import { AvatarComponent } from '@kirbydesign/designsystem/avatar';
 import { ButtonComponent } from '@kirbydesign/designsystem/button';
 import { CardComponent } from '@kirbydesign/designsystem/card';
-import { CheckboxComponent } from '@kirbydesign/designsystem/checkbox';
 import { DropdownComponent } from '@kirbydesign/designsystem/dropdown';
 import { ListItemTemplateDirective } from '@kirbydesign/designsystem/list';
-import { COMPONENT_PROPS, ModalController, ModalFooterComponent } from '@kirbydesign/designsystem/modal';
+import { COMPONENT_PROPS, ModalController } from '@kirbydesign/designsystem/modal';
 import { PageTitleComponent } from '@kirbydesign/designsystem/page';
 import { EmptyStateComponent } from '@kirbydesign/designsystem/empty-state';
 import { IconComponent } from '@kirbydesign/designsystem/icon';
 import { ItemComponent } from '@kirbydesign/designsystem/item';
-import { CHECK_ICONS, Payment, PaymentStatus, RecipientCheck, createPayments, formatAmount } from './payments';
+import { SectionHeaderComponent } from '@kirbydesign/designsystem/section-header';
+import { FlagComponent } from '@kirbydesign/designsystem/flag';
+import { ApproveCheckModalComponent } from './approve-check-modal';
+import { CHECK_ICONS, Payment, PaymentStatus, createPayments, formatAmount } from './payments';
+import { TableConfigService } from './table-config';
 import { PaymentsTableComponent } from './payments-table';
 
 type Tone = 'danger' | 'warning' | 'success' | 'neutral';
@@ -30,6 +33,8 @@ interface Delivery {
   sender: string;
   blocked: DeliveryLine[];
   pending: DeliveryLine[];
+  /** Modtagertjek udføres på alle betalinger i en leverance, eller er fravalgt for hele leverancen */
+  checkExempt: boolean;
   loaded: number;
   loadedAmount: number;
   pendingCount: number;
@@ -113,6 +118,7 @@ function buildDeliveries(): Delivery[] {
       number: number--,
       date,
       sender: SENDERS[Math.floor(rnd() * SENDERS.length)],
+      checkExempt: false,
       blocked,
       pending,
       loaded: sum([...blocked, ...pending], (l) => l.count),
@@ -128,6 +134,8 @@ function buildDeliveries(): Delivery[] {
   const nov = list.filter((d) => d.date.getFullYear() === TODAY.getFullYear() && d.date.getMonth() === TODAY.getMonth());
   if (nov[2]) setBlocked(nov[2], 'Afviste', 'Afvist', 3, 'danger');
   if (nov[3]) setBlocked(nov[3], 'Stoppede', 'Stoppet', 4, 'danger');
+  // Eksempler på leverancer, hvor modtagertjek er fravalgt for hele leverancen
+  for (const d of [nov[1], nov[4], list[list.length - 1 - 40]]) if (d) d.checkExempt = true;
   return list;
 }
 
@@ -163,8 +171,8 @@ function sameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-// Anden udbyder kan ikke forekomme i en leverance
-const POOL = createPayments().filter((p) => p.recipientCheck !== 'Anden udbyder');
+// Anden udbyder kan ikke forekomme i en leverance, og Fravalgt gælder kun hele leverancer
+const POOL = createPayments().filter((p) => p.recipientCheck !== 'Anden udbyder' && p.recipientCheck !== 'Modtagertjek fravalgt');
 
 /** Fiktive betalinger i en leverance. Betalingerne hentes fra testdata, og status følger den valgte linje */
 function paymentsFor(d: Delivery, lines: DeliveryLine[]): Payment[] {
@@ -174,7 +182,17 @@ function paymentsFor(d: Delivery, lines: DeliveryLine[]): Payment[] {
     for (let k = 0; k < l.count; k++) {
       const base = POOL[cursor++ % POOL.length];
       if (lines.includes(l)) {
-        out.push({ ...base, id: d.number * 100 + out.length, status: l.statuses[0], children: undefined });
+        const exempt = d.checkExempt;
+        out.push({
+          ...base,
+          id: d.number * 100 + out.length,
+          status: l.statuses[0],
+          children: undefined,
+          ...(exempt && {
+            recipientCheck: 'Modtagertjek fravalgt' as const,
+            payees: base.payees?.map((x) => ({ ...x, recipientCheck: 'Modtagertjek fravalgt' as const })),
+          }),
+        });
       }
     }
   }
@@ -241,171 +259,6 @@ function activitiesFor(d: Delivery): DeliveryActivity[] {
 })
 export class DeliveryActivitiesModalComponent {
   readonly props = inject<{ number: number; activities: DeliveryActivity[] }>(COMPONENT_PROPS);
-}
-
-const CHECK_ORDER: RecipientCheck[] = ['Match', 'Modtagertjek fravalgt', 'Tæt match', 'Intet match', 'Ikke muligt'];
-const CHECK_TONES: Record<RecipientCheck, Tone> = {
-  Match: 'success',
-  'Tæt match': 'warning',
-  'Intet match': 'danger',
-  'Ikke muligt': 'neutral',
-  'Anden udbyder': 'neutral',
-  'Modtagertjek fravalgt': 'neutral',
-};
-const CHECK_LABELS: Partial<Record<RecipientCheck, string>> = { 'Ikke muligt': 'Modtagertjek ikke muligt' };
-const DEFAULT_CHECKED: RecipientCheck[] = ['Match', 'Modtagertjek fravalgt'];
-
-/** Bekræftelse af godkendelse af en leverance, hvor brugeren vælger, hvilke modtagertjek-grupper der godkendes */
-@Component({
-  selector: 'app-approve-delivery-modal',
-  imports: [PageTitleComponent, CardComponent, ItemComponent, AvatarComponent, IconComponent, CheckboxComponent, ButtonComponent, ModalFooterComponent],
-  template: `
-    <kirby-page-title>Godkend betalinger</kirby-page-title>
-    <div class="content">
-      <div class="head">
-        <div>
-          <div class="kirby-text-normal-bold">Modtagertjek</div>
-          <div class="kirby-text-small muted">Vælg for at godkende</div>
-        </div>
-        <kirby-checkbox
-          aria-label="Vælg alle modtagertjek"
-          [checked]="allChecked()"
-          [indeterminate]="!allChecked() && selectedCount() > 0"
-          (checkedChange)="toggleAll($event)"
-        ></kirby-checkbox>
-      </div>
-      <kirby-card>
-        @for (g of groups; track g.check) {
-          <kirby-item>
-            <kirby-avatar slot="start" size="xs" [class]="g.tone"><kirby-icon [name]="g.icon"></kirby-icon></kirby-avatar>
-            <div class="item-text">
-              <div class="kirby-text-normal">{{ g.label }}</div>
-              <div class="kirby-text-small muted">{{ g.count }} {{ g.count === 1 ? 'betaling' : 'betalinger' }} • {{ amount(g.amount) }}</div>
-            </div>
-            <kirby-checkbox
-              slot="end"
-              [attr.aria-label]="'Godkend ' + g.label"
-              [checked]="isChecked(g.check)"
-              (checkedChange)="toggle(g.check, $event)"
-            ></kirby-checkbox>
-          </kirby-item>
-        }
-      </kirby-card>
-
-      <div class="kirby-text-normal-bold totals-title">Totaler</div>
-      <kirby-card>
-        <kirby-item>
-          <kirby-avatar slot="start" size="xs" text="∑"></kirby-avatar>
-          <div class="item-text">
-            <div class="kirby-text-normal">{{ selectedCount() }} {{ selectedCount() === 1 ? 'betaling' : 'betalinger' }} i alt</div>
-            <div class="kirby-text-small muted">Vejledende omregning</div>
-          </div>
-          <strong slot="end" class="amount">DKK {{ amount(selectedAmount()) }}</strong>
-        </kirby-item>
-      </kirby-card>
-    </div>
-    <kirby-modal-footer>
-      <div class="footer">
-        <button kirby-button attentionLevel="3" (click)="close(false)">Annullér</button>
-        <button kirby-button attentionLevel="1" [disabled]="!selectedCount()" (click)="close(true)">Godkend</button>
-      </div>
-    </kirby-modal-footer>
-  `,
-  styles: `
-    .content {
-      display: flex;
-      flex-direction: column;
-      gap: var(--kirby-spacing-s);
-      padding: var(--kirby-spacing-m);
-    }
-    .head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 0 0 var(--kirby-spacing-xs);
-      margin-right: calc(-1 * var(--kirby-spacing-xs));
-    }
-    .totals-title {
-      margin-top: var(--kirby-spacing-s);
-      padding: 0 var(--kirby-spacing-xs);
-    }
-    .muted {
-      color: var(--kirby-text-color-semi-dark);
-    }
-    .amount {
-      white-space: nowrap;
-    }
-    kirby-item:not(:last-child) {
-      border-bottom: 1px solid var(--kirby-color-border-base-quiet, #dadada);
-    }
-    .footer {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--kirby-spacing-xs);
-      width: 100%;
-      button {
-        margin: 0;
-      }
-    }
-    kirby-avatar {
-      --kirby-avatar-color: var(--kirby-black);
-      --kirby-avatar-background-color: var(--kirby-semi-light);
-      &.success {
-        --kirby-avatar-background-color: var(--kirby-success-tint);
-      }
-      &.warning {
-        --kirby-avatar-background-color: var(--kirby-warning-tint);
-      }
-      &.danger {
-        --kirby-avatar-background-color: var(--kirby-danger-tint);
-      }
-    }
-  `,
-})
-export class ApproveDeliveryModalComponent {
-  private readonly modal = inject(ModalController);
-  private readonly props = inject<{ payments: Payment[] }>(COMPONENT_PROPS);
-  readonly groups = CHECK_ORDER.map((check) => {
-    const list = this.props.payments.filter((p) => p.recipientCheck === check);
-    return {
-      check,
-      label: CHECK_LABELS[check] ?? check,
-      icon: CHECK_ICONS[check],
-      tone: CHECK_TONES[check],
-      count: list.length,
-      amount: list.reduce((n, p) => n + p.amount, 0),
-    };
-  }).filter((g) => g.count > 0);
-  private readonly checked = signal<ReadonlySet<RecipientCheck>>(new Set(DEFAULT_CHECKED));
-
-  readonly allChecked = computed(() => this.groups.every((g) => this.checked().has(g.check)));
-  readonly selectedCount = computed(() => this.groups.filter((g) => this.checked().has(g.check)).reduce((n, g) => n + g.count, 0));
-  readonly selectedAmount = computed(() => this.groups.filter((g) => this.checked().has(g.check)).reduce((n, g) => n + g.amount, 0));
-
-  isChecked(c: RecipientCheck) {
-    return this.checked().has(c);
-  }
-
-  toggle(c: RecipientCheck, on: boolean) {
-    this.checked.update((s) => {
-      const next = new Set(s);
-      if (on) next.add(c);
-      else next.delete(c);
-      return next;
-    });
-  }
-
-  toggleAll(on: boolean) {
-    this.checked.set(new Set(on ? this.groups.map((g) => g.check) : []));
-  }
-
-  amount(n: number) {
-    return formatAmount(n);
-  }
-
-  close(result: boolean) {
-    this.modal.hideTopmost(result);
-  }
 }
 
 /** Valg af én måned inden for de seneste fem år */
@@ -476,6 +329,8 @@ export class MonthPickerModalComponent {
     CardComponent,
     DropdownComponent,
     EmptyStateComponent,
+    FlagComponent,
+    SectionHeaderComponent,
     IconComponent,
     ItemComponent,
     ListItemTemplateDirective,
@@ -513,21 +368,28 @@ export class MonthPickerModalComponent {
 
     <div class="list">
       @for (d of visible(); track d.number) {
-        <kirby-card variant="outlined" class="delivery">
+        <kirby-card [variant]="cfg().deliveryCard" class="delivery">
           <kirby-item class="head" [selectable]="true" disclosure="arrow-more" (click)="show(d)">
-            <kirby-icon slot="start" name="document"></kirby-icon>
+            <kirby-icon slot="start" name="signed-document"></kirby-icon>
             <div class="item-text">
               <div class="kirby-text-normal">{{ d.number }}</div>
               <div class="kirby-text-small muted">{{ dateText(d.date) }} • {{ d.sender }}</div>
             </div>
-            <span slot="end" class="kirby-text-small muted">{{ d.loaded }} betalinger indlæst til {{ amount(d.loadedAmount) }}</span>
+            <div slot="end" class="head-end">
+              <span class="kirby-text-small muted">{{ d.loaded }} betalinger indlæst til {{ amount(d.loadedAmount) }}</span>
+              @if (d.checkExempt) {
+                <kirby-flag size="xs" themeColor="semi-light">
+                  <span class="flag-content"><kirby-icon [name]="exemptIcon" />Modtagertjek fravalgt</span>
+                </kirby-flag>
+              }
+            </div>
           </kirby-item>
 
           <div class="body">
               <div class="columns">
                 @if (d.pending.length) {
                   <section>
-                    <div class="kirby-text-small muted group-title">Til godkendelse</div>
+                    <kirby-section-header><h4 heading class="sr-only">Til godkendelse</h4><span label>Til godkendelse</span></kirby-section-header>
                     <kirby-card variant="outlined" class="lines">
                       @for (l of d.pending; track l.label) {
                         <ng-container *ngTemplateOutlet="row; context: { $implicit: l, d: d }"></ng-container>
@@ -544,7 +406,7 @@ export class MonthPickerModalComponent {
                   </section>
                 } @else {
                   <section>
-                    <div class="kirby-text-small muted group-title">Til godkendelse</div>
+                    <kirby-section-header><h4 heading class="sr-only">Til godkendelse</h4><span label>Til godkendelse</span></kirby-section-header>
                     <kirby-card variant="outlined" class="no-approvable">
                       <kirby-empty-state
                         title="Ingen betalinger kan godkendes"
@@ -555,7 +417,7 @@ export class MonthPickerModalComponent {
                 }
                 @if (d.blocked.length) {
                   <section>
-                    <div class="kirby-text-small muted group-title">Kan ikke godkendes</div>
+                    <kirby-section-header><h4 heading class="sr-only">Kan ikke godkendes</h4><span label>Kan ikke godkendes</span></kirby-section-header>
                     <kirby-card variant="outlined" class="lines">
                       @for (l of d.blocked; track l.label) {
                         <ng-container *ngTemplateOutlet="row; context: { $implicit: l, d: d }"></ng-container>
@@ -614,6 +476,25 @@ export class MonthPickerModalComponent {
     .head {
       --kirby-item-background: transparent;
     }
+    .head-end {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: var(--kirby-spacing-xxs);
+    }
+    .flag-content {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--kirby-spacing-xxs);
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
     .divider {
       border-top: 1px solid var(--kirby-color-border-base-quiet, #dadada);
     }
@@ -653,9 +534,6 @@ export class MonthPickerModalComponent {
     .no-approvable {
       padding-block: var(--kirby-spacing-xxl);
     }
-    .group-title {
-      padding: 0 var(--kirby-spacing-s) var(--kirby-spacing-xs);
-    }
     .amount {
       white-space: nowrap;
     }
@@ -676,6 +554,7 @@ export class MonthPickerModalComponent {
 })
 export class DeliveriesComponent {
   private readonly modal = inject(ModalController);
+  readonly cfg = inject(TableConfigService).config;
   readonly MORE = 'Vælg flere';
   @ViewChild(DropdownComponent) private dropdown?: DropdownComponent;
   private readonly custom = signal<{ year: number; month: number } | null>(null);
@@ -732,12 +611,22 @@ export class DeliveriesComponent {
 
   /** Bekræftelse, før en leverance godkendes. [OPEN POINT: hvad der sker efter bekræftelse] */
   approve(d: Delivery) {
+    if (d.checkExempt) {
+      // Modtagertjek er fravalgt, så der er intet resultat at vise
+      this.modal.showAlert({
+        title: `Godkend alle ${d.pendingCount} betalinger?`,
+        message: `Beløb i alt: ${this.amount(d.pendingAmount)} DKK`,
+        cancelBtn: 'Annuller',
+        okBtn: 'Godkend',
+      });
+      return;
+    }
     this.modal.showModal({
-      component: ApproveDeliveryModalComponent,
+      component: ApproveCheckModalComponent,
       flavor: 'modal',
       size: 'medium',
       customHeight: '820px',
-      componentProps: { payments: paymentsFor(d, d.pending) },
+      componentProps: { items: paymentsFor(d, d.pending) },
     });
   }
 
@@ -762,11 +651,13 @@ export class DeliveriesComponent {
     });
   }
 
+  readonly exemptIcon = CHECK_ICONS['Modtagertjek fravalgt'];
+
   stopAll(d: Delivery) {
     this.modal.showAlert(
       {
-        title: `Stop alle ${d.pendingCount} betalinger?`,
-        message: 'Alle betalinger stoppes. Betalinger kan genoprettes de næste 5 bankdage.',
+        title: 'Stop alle betalinger?',
+        message: `Alle ${d.pendingCount} betalinger stoppes. Betalinger kan genoprettes de næste 5 bankdage.`,
         icon: { name: 'warning', themeColor: 'danger' },
         cancelBtn: 'Annuller',
         okBtn: { text: 'Stop', isDestructive: true },

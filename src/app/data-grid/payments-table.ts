@@ -25,6 +25,7 @@ import { ItemComponent } from '@kirbydesign/designsystem/item';
 import { MenuComponent } from '@kirbydesign/designsystem/menu';
 import { CardComponent } from '@kirbydesign/designsystem/card';
 import { COMPONENT_PROPS, ModalController } from '@kirbydesign/designsystem/modal';
+import { ApproveCheckModalComponent } from './approve-check-modal';
 import { CurrencyComponent } from './currency';
 import { RecipientCheckComponent } from './recipient-check';
 import {
@@ -228,7 +229,12 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   private readonly modalController = inject(ModalController);
   /** Åbnet i en modal fra en leverance: kun den leverances betalinger vises */
   private readonly modalProps = inject<{ payments?: Payment[] }>(COMPONENT_PROPS, { optional: true });
-  readonly payments = this.modalProps?.payments ? signal(this.modalProps.payments).asReadonly() : this.service.payments;
+  readonly payments = this.modalProps?.payments
+    ? signal(this.modalProps.payments).asReadonly()
+    : computed(() => {
+        const all = this.service.payments();
+        return this.cfg().showOtherProvider ? all : all.filter((p) => p.recipientCheck !== 'Anden udbyder');
+      });
   private readonly registerExtra = this.modalProps?.payments
     ? (() => {
         this.service.extra.set(this.modalProps.payments!);
@@ -1498,7 +1504,24 @@ export class PaymentsTableComponent implements OnInit, OnDestroy, AfterViewCheck
   }
 
   approve(p: Payment) {
-    this.service.approve(p);
+    const payees = p.payees;
+    if (!payees || payees.every((x) => x.recipientCheck === 'Modtagertjek fravalgt')) {
+      this.service.approve(p);
+      return;
+    }
+    // [OPEN POINT: Valget af modtagertjek-grupper styrer endnu ikke, hvilke modtagere der godkendes]
+    this.modalController.showModal(
+      {
+        component: ApproveCheckModalComponent,
+        flavor: 'modal',
+        size: 'medium',
+        customHeight: '820px',
+        componentProps: { items: payees, unit: { one: 'modtager', many: 'modtagere' } },
+      },
+      (confirmed?: boolean) => {
+        if (confirmed) this.service.approve(p);
+      },
+    );
   }
 
   stop(p: Payment) {

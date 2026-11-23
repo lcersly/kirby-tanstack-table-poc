@@ -13,6 +13,7 @@ import { RadioComponent, RadioGroupComponent } from '@kirbydesign/designsystem/r
 import {
   CheckboxSize,
   Container,
+  DeliveryCard,
   Density,
   DetailMode,
   LoadingMode,
@@ -25,7 +26,7 @@ import {
   PRESETS,
 } from './table-config';
 
-type GroupId = 'features' | 'detail' | 'theme' | 'columns' | 'actions' | 'loading' | 'cells' | 'payments' | 'user';
+type GroupId = 'features' | 'detail' | 'theme' | 'columns' | 'actions' | 'loading' | 'cells' | 'payments' | 'deliveries' | 'user';
 
 type FeatureKey =
   | 'featureSelect'
@@ -201,6 +202,13 @@ interface Option<T> {
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Vis modtagertjek som flag', checked: cfg().checkStyle === 'flag', change: setCheckFlag }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Vis flag foran valutakoder', checked: cfg().currencyStyle === 'flag', change: setCurrencyFlag }"></ng-container>
             <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Bruger må se lønmodtagernes navne', checked: cfg().showPayeeNames, change: setPayeeNames }"></ng-container>
+            <ng-container *ngTemplateOutlet="toggleRow; context: { $implicit: 'Vis betalinger med Anden udbyder', checked: cfg().showOtherProvider, change: setOtherProvider }"></ng-container>
+          </kirby-card>
+        }
+        @case ('deliveries') {
+          <ng-container *ngTemplateOutlet="pageHeader; context: { $implicit: 'Leverancer', label: 'Vælg hvordan leverancerne skal præsenteres' }"></ng-container>
+          <kirby-card class="rows">
+            <ng-container *ngTemplateOutlet="selectRow; context: { $implicit: 'Leverancekort', options: deliveryCardOptions, key: 'deliveryCard' }"></ng-container>
           </kirby-card>
         }
         @default {
@@ -349,6 +357,7 @@ export class TableSettingsComponent {
     { id: 'loading', title: 'Indlæsning' },
     { id: 'cells', title: 'Celler' },
     { id: 'payments', title: 'Betalingsoversigt' },
+    { id: 'deliveries', title: 'Leverancer' },
     { id: 'user', title: 'Brugerkonfiguration' },
   ];
 
@@ -373,6 +382,8 @@ export class TableSettingsComponent {
         const n = [c.statusStyle === 'flag', c.checkStyle === 'flag', c.currencyStyle === 'flag'].filter(Boolean).length;
         return `${n} med flag`;
       }
+      case 'deliveries':
+        return this.labelOf(this.deliveryCardOptions, c.deliveryCard);
       case 'user': {
         const n = [c.userColumnWidth, c.userColumnReorder, c.userColumnChoice, c.userDensity, c.userZebra, c.userDividers, c.userScroll].filter(Boolean).length;
         return `${n} af 7 til`;
@@ -406,6 +417,10 @@ export class TableSettingsComponent {
     { value: 'canvas', label: 'Canvas' },
     { value: 'card', label: 'Hævet kort' },
     { value: 'stroked-card', label: 'Optegnet kort' },
+  ];
+  readonly deliveryCardOptions: Option<DeliveryCard>[] = [
+    { value: 'outlined', label: 'Optegnet kort' },
+    { value: 'elevated', label: 'Hævet kort' },
   ];
   readonly densityOptions: Option<Density>[] = [
     { value: 'compact', label: 'Kompakt' },
@@ -442,6 +457,7 @@ export class TableSettingsComponent {
   }
 
   readonly setPayeeNames = (v: boolean) => this.update('showPayeeNames', v);
+  readonly setOtherProvider = (v: boolean) => this.update('showOtherProvider', v);
   readonly setZebra = (v: boolean) => this.update('zebra', v);
   readonly setCellSelection = (v: boolean) => this.update('cellSelection', v);
   readonly setInlineEdit = (v: boolean) => this.update('inlineEdit', v);
