@@ -45,19 +45,22 @@ vi.mock('@kirbydesign/designsystem/icon', async () => {
 });
 
 describe('PaymentOverviewPrototype', () => {
-  async function createOverview() {
+  async function createOverview(initialRows?: number) {
     await TestBed.configureTestingModule({
       imports: [PaymentOverviewPrototype],
       providers: [provideRouter([]), provideNoopAnimations(), { provide: LOCALE_ID, useValue: 'da-DK' }],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(PaymentOverviewPrototype);
+    if (initialRows !== undefined) {
+      fixture.componentInstance['payments'].set(createSyntheticPayments(initialRows));
+    }
     fixture.detectChanges();
     return fixture;
   }
 
   async function createSmallOverview() {
-    const fixture = await createOverview();
+    const fixture = await createOverview(30);
     const root = fixture.nativeElement as HTMLElement;
     const count = root.querySelector<HTMLInputElement>('#payment-count')!;
     count.value = '30';
@@ -68,7 +71,7 @@ describe('PaymentOverviewPrototype', () => {
   }
 
   it('uses a collapsed Kirby accordion for data generation and has no filter controls', async () => {
-    const fixture = await createOverview();
+    const fixture = await createOverview(30);
     const root = fixture.nativeElement as HTMLElement;
     const accordion = root.querySelector<HTMLButtonElement>('kirby-accordion-item button.header')!;
 
@@ -209,7 +212,7 @@ describe('PaymentOverviewPrototype', () => {
   });
 
   it('replaces the rendered dataset after a valid count is submitted', async () => {
-    const fixture = await createOverview();
+    const fixture = await createOverview(30);
     const root = fixture.nativeElement as HTMLElement;
     const input = root.querySelector<HTMLInputElement>('#payment-count');
     const button = root.querySelector<HTMLButtonElement>('button[kirby-button]');
@@ -262,7 +265,7 @@ describe('PaymentOverviewPrototype', () => {
   });
 
   it('shows an error and keeps the previous dataset for invalid counts', async () => {
-    const fixture = await createOverview();
+    const fixture = await createOverview(30);
     const root = fixture.nativeElement as HTMLElement;
     const input = root.querySelector<HTMLInputElement>('#payment-count');
     const button = root.querySelector<HTMLButtonElement>('button[kirby-button]');
@@ -284,7 +287,7 @@ describe('PaymentOverviewPrototype', () => {
       fixture.detectChanges();
 
       expect(root.querySelector('[role="alert"]')?.textContent).toContain('0 og 100.000');
-      expect(root.querySelectorAll('tbody tr')).toHaveLength(1_000);
+      expect(root.querySelectorAll('tbody tr')).toHaveLength(30);
       expect(root.querySelector('tbody tr')?.textContent?.trim()).toBe(firstRow);
     }
   });
@@ -298,7 +301,7 @@ describe('PaymentOverviewPrototype', () => {
     ['Modtagerkonto', 'destinationAccount'],
     ['Status', 'status'],
   ] as const)('sorts %s ascending, descending and back to original order', async (label, key) => {
-    const fixture = await createOverview();
+    const fixture = await createOverview(20);
     const root = fixture.nativeElement as HTMLElement;
     const input = root.querySelector<HTMLInputElement>('#payment-count')!;
     input.value = '20';
@@ -350,7 +353,7 @@ describe('PaymentOverviewPrototype', () => {
   });
 
   it('switches the sorted column and keeps its sort when regenerating rows', async () => {
-    const fixture = await createOverview();
+    const fixture = await createOverview(30);
     const root = fixture.nativeElement as HTMLElement;
     const dateHeader = root.querySelector('thead th[data-column-id="date"]')!;
     const amountHeader = root.querySelector('thead th[data-column-id="amount"]')!;
