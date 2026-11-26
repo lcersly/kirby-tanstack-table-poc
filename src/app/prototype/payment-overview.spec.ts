@@ -92,7 +92,7 @@ describe('PaymentOverviewPrototype', () => {
     );
   }
 
-  it('renders each payment status as a Kirby badge and keeps row details available', async () => {
+  it('renders each payment status as a Kirby badge', async () => {
     const fixture = await createSmallOverview();
     const root = fixture.nativeElement as HTMLElement;
     const payments = createSyntheticPayments(30);
@@ -114,10 +114,8 @@ describe('PaymentOverviewPrototype', () => {
 
     badges[0].click();
     await fixture.whenStable();
-    expect(root.querySelector('.payment-details')?.textContent).toContain(
-      payments[0].destinationAccount,
-    );
-    expect(root.querySelector('.payment-details')?.textContent).toContain(payments[0].status);
+    expect(root.querySelector('.payment-details')).toBeNull();
+    expect(root.querySelector('tbody tr')?.hasAttribute('tabindex')).toBe(false);
   });
 
   it('renders the seven payment headers and the initial 1,000-row dataset', async () => {
@@ -329,72 +327,6 @@ describe('PaymentOverviewPrototype', () => {
     );
   });
 
-  it('opens the clicked payment details, preserves them while sorting and returns focus on close', async () => {
-    const fixture = await createOverview();
-    const root = fixture.nativeElement as HTMLElement;
-    const row = root.querySelectorAll<HTMLTableRowElement>('tbody tr')[1];
-    const payment = createSyntheticPayments(2)[1];
-
-    row.click();
-    await fixture.whenStable();
-
-    const panel = root.querySelector<HTMLElement>('.payment-details')!;
-    expect(panel.querySelector('h2')?.textContent).toBe('Betalingsdetaljer');
-    expect(
-      Array.from(panel.querySelectorAll('dd'), (element) => element.textContent?.trim()),
-    ).toEqual([
-      payment.recipient,
-      payment.date,
-      `${payment.amount} ${payment.currency}`,
-      payment.paymentType,
-      payment.destinationAccount,
-      payment.status,
-    ]);
-    expect(document.activeElement).toBe(panel.querySelector('h2'));
-    expect(row.classList.contains('payment-row-selected')).toBe(true);
-
-    root.querySelector<HTMLButtonElement>('thead th[data-column-id="amount"] button')!.click();
-    await fixture.whenStable();
-    expect(panel.textContent).toContain(payment.destinationAccount);
-    panel.querySelector('button')!.click();
-    await fixture.whenStable();
-    expect(root.querySelector('.payment-details h2')).toBeNull();
-    expect(document.activeElement).toBe(row);
-    expect(row.classList.contains('payment-row-selected')).toBe(false);
-  });
-
-  it.each(['Enter', ' '])('opens details with %s and closes them with Escape', async (key) => {
-    const fixture = await createOverview();
-    const root = fixture.nativeElement as HTMLElement;
-    const row = root.querySelector<HTMLTableRowElement>('tbody tr')!;
-
-    row.focus();
-    row.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
-    await fixture.whenStable();
-    const heading = root.querySelector<HTMLElement>('#payment-details-heading')!;
-    expect(document.activeElement).toBe(heading);
-    heading.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await fixture.whenStable();
-    expect(root.querySelector('#payment-details-heading')).toBeNull();
-    expect(document.activeElement).toBe(row);
-  });
-
-  it('closes stale details after regenerating payments', async () => {
-    const fixture = await createOverview();
-    const root = fixture.nativeElement as HTMLElement;
-    root.querySelector<HTMLTableRowElement>('tbody tr')!.click();
-    await fixture.whenStable();
-    expect(root.querySelector('#payment-details-heading')).not.toBeNull();
-
-    const input = root.querySelector<HTMLInputElement>('#payment-count')!;
-    input.value = '4';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    root.querySelector<HTMLButtonElement>('button[kirby-button]')!.click();
-    await fixture.whenStable();
-    expect(root.querySelectorAll('tbody tr')).toHaveLength(4);
-    expect(root.querySelector('#payment-details-heading')).toBeNull();
-  });
-
   it('filters by status and keeps selected rows hidden by the filter', async () => {
     const fixture = await createOverview();
     const root = fixture.nativeElement as HTMLElement;
@@ -413,8 +345,6 @@ describe('PaymentOverviewPrototype', () => {
       .querySelector<HTMLElement>('tbody td[data-column-id="select"] kirby-data-grid-row-checkbox')!
       .click();
     await fixture.whenStable();
-    expect(root.querySelector('.payment-details')).toBeNull();
-
     fixture.debugElement
       .query(By.directive(SegmentedControlComponent))
       .triggerEventHandler('segmentSelect', { id: otherStatus, text: otherStatus });
@@ -533,7 +463,36 @@ describe('PaymentOverviewPrototype', () => {
     expect(visibleAccounts(root)).toEqual(previous);
   });
 
-  it('combines amount and status filters while preserving sorting, selection and details', async () => {
+  it('clears the amount filter, form and validation errors without changing the status filter', async () => {
+    const fixture = await createSmallOverview();
+    const root = fixture.nativeElement as HTMLElement;
+    const payments = createSyntheticPayments(30);
+    const status = payments[0].status;
+    fixture.debugElement
+      .query(By.directive(SegmentedControlComponent))
+      .triggerEventHandler('segmentSelect', { id: status, text: status });
+    setAmountField(root, 'currency', payments[0].currency);
+    setAmountField(root, 'minimum', '0');
+    submitAmount(root);
+    await fixture.whenStable();
+
+    setAmountField(root, 'minimum', 'invalid');
+    submitAmount(root);
+    await fixture.whenStable();
+    expect(root.querySelector('#amount-error')).not.toBeNull();
+
+    root.querySelector<HTMLButtonElement>('.amount-filter button[type="button"]')!.click();
+    await fixture.whenStable();
+    expect(root.querySelector('#amount-error')).toBeNull();
+    expect(root.querySelector<HTMLInputElement>('[formControlName="minimum"]')?.value).toBe('');
+    expect(root.querySelector<HTMLInputElement>('[formControlName="maximum"]')?.value).toBe('');
+    expect(root.querySelector('.amount-filter [aria-live]')?.textContent).toContain('Intet aktivt');
+    expect(visibleAccounts(root)).toEqual(
+      payments.filter((payment) => payment.status === status).map((payment) => payment.destinationAccount),
+    );
+  });
+
+  it('combines amount and status filters while preserving sorting and selection', async () => {
     const fixture = await createSmallOverview();
     const root = fixture.nativeElement as HTMLElement;
     const payments = createSyntheticPayments(30);
@@ -541,7 +500,6 @@ describe('PaymentOverviewPrototype', () => {
     const currency = payments.find((payment) => payment.currency !== selected.currency)!.currency;
     const row = root.querySelector<HTMLTableRowElement>('tbody tr')!;
     row.querySelector<HTMLElement>('kirby-data-grid-row-checkbox')!.click();
-    row.click();
     await fixture.whenStable();
     root.querySelector<HTMLButtonElement>('thead th[data-column-id="amount"] button')!.click();
     fixture.debugElement
@@ -559,13 +517,6 @@ describe('PaymentOverviewPrototype', () => {
         .map((payment) => payment.destinationAccount),
     );
     expect(root.querySelector('.table-toolbar')?.textContent).toContain('1 skjult af filteret');
-    expect(root.querySelector('.payment-details')?.textContent).toContain(
-      selected.destinationAccount,
-    );
-    root.querySelector<HTMLButtonElement>('.payment-details button')!.click();
-    await fixture.whenStable();
-    expect(document.activeElement).toBe(root.querySelector('table'));
-
     root.querySelector<HTMLButtonElement>('.amount-filter button[type="button"]')!.click();
     await fixture.whenStable();
     expect(visibleAccounts(root)).toEqual(

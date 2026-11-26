@@ -1,20 +1,4 @@
-import {
-  afterNextRender,
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  ElementRef,
-  inject,
-  Injector,
-  input,
-  signal,
-  viewChild,
-} from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { ButtonComponent } from '@kirbydesign/designsystem/button';
-import { DropdownComponent } from '@kirbydesign/designsystem/dropdown';
-import { FormFieldComponent, InputComponent } from '@kirbydesign/designsystem/form-field';
+import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from '@angular/core';
 import {
   SegmentedControlComponent,
   SegmentItem,
@@ -43,36 +27,12 @@ import {
   kirbyDataGridSelectionColumn,
 } from '@kirbydesign/designsystem/data-grid';
 
-import { amountFormatter, dateFormatter, PAYMENT_CURRENCIES, PaymentRecord } from './payment-data';
+import { amountFormatter, dateFormatter, PaymentRecord } from './payment-data';
+import { AmountFilter, PaymentAmountFilter } from './payment-amount-filter';
 import { PaymentStatusCell } from './payment-status-cell';
 
 const collator = new Intl.Collator('da-DK', { numeric: true, sensitivity: 'base' });
-const integerFormatter = new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 });
 const features = tableFeatures({ rowSortingFeature, columnFilteringFeature, rowSelectionFeature });
-
-interface AmountFilter {
-  currency: string;
-  minOre: number | null;
-  maxOre: number | null;
-}
-
-type AmountField = 'currency' | 'minimum' | 'maximum';
-
-function parseAmount(value: string): number | null | undefined {
-  const text = value.trim();
-  if (!text) return null;
-  const match = /^(\d+)(?:[,.](\d{1,2}))?$/.exec(text);
-  if (!match) return undefined;
-  const whole = match[1].replace(/^0+/, '') || '0';
-  if (whole.length > 14) return undefined;
-  const minorUnits = BigInt(whole) * 100n + BigInt((match[2] ?? '').padEnd(2, '0'));
-  return minorUnits <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(minorUnits) : undefined;
-}
-
-function formatAmount(minorUnits: number): string {
-  const amount = BigInt(minorUnits);
-  return `${integerFormatter.format(amount / 100n)},${String(amount % 100n).padStart(2, '0')}`;
-}
 
 function isAmountFilter(value: unknown): value is AmountFilter {
   if (!value || typeof value !== 'object') return false;
@@ -134,11 +94,7 @@ const statusItems: SegmentItem[] = [
 @Component({
   selector: 'app-prototype-payment-table',
   imports: [
-    ButtonComponent,
-    DropdownComponent,
-    FormFieldComponent,
-    InputComponent,
-    ReactiveFormsModule,
+    PaymentAmountFilter,
     SegmentedControlComponent,
     DataGridComponent,
     DataGridTableDirective,
@@ -154,30 +110,10 @@ const statusItems: SegmentItem[] = [
 })
 export class PaymentTablePrototype {
   readonly payments = input.required<PaymentRecord[]>();
-  private readonly injector = inject(Injector);
-  private readonly detailsHeading = viewChild<ElementRef<HTMLElement>>('detailsHeading');
-  private readonly gridTable = viewChild<ElementRef<HTMLTableElement>>('gridTable');
-  private returnFocus: HTMLElement | null = null;
   protected readonly statusItems = statusItems;
-  protected readonly currencies: string[] = [...PAYMENT_CURRENCIES];
-  protected readonly amountForm = new FormGroup({
-    currency: new FormControl('', { nonNullable: true }),
-    minimum: new FormControl('', { nonNullable: true }),
-    maximum: new FormControl('', { nonNullable: true }),
-  });
-  protected readonly amountError = signal<string | null>(null);
-  protected readonly amountErrorFields = signal<AmountField[]>([]);
   protected readonly activeAmountFilter = computed(() => {
     const value = this.columnFilters().find((filter) => filter.id === 'amount')?.value;
     return isAmountFilter(value) ? value : null;
-  });
-  protected readonly amountFilterSummary = computed(() => {
-    const filter = this.activeAmountFilter();
-    if (!filter) return null;
-    const min = filter.minOre === null ? null : formatAmount(filter.minOre);
-    const max = filter.maxOre === null ? null : formatAmount(filter.maxOre);
-    if (min !== null && max !== null) return `${min} - ${max} ${filter.currency}`;
-    return min !== null ? `Fra ${min} ${filter.currency}` : `Til ${max} ${filter.currency}`;
   });
   protected readonly statusFilterIndex = computed(() => {
     const status = this.columnFilters().find((filter) => filter.id === 'status')?.value;
@@ -209,10 +145,6 @@ export class PaymentTablePrototype {
       return comparison * direction;
     });
   });
-  protected readonly selectedPayment = computed(() => {
-    const id = this.detailId();
-    return id ? this.payments().find((payment) => payment.id === id) : undefined;
-  });
   protected readonly selectedCount = computed(
     () => Object.values(this.rowSelection()).filter(Boolean).length,
   );
@@ -225,7 +157,6 @@ export class PaymentTablePrototype {
   protected readonly sorting = signal<SortingState>([]);
   protected readonly columnFilters = signal<ColumnFiltersState>([]);
   protected readonly rowSelection = signal<RowSelectionState>({});
-  protected readonly detailId = signal<string | null>(null);
 
   readonly table = injectTable(() => ({
     features,
@@ -253,7 +184,6 @@ export class PaymentTablePrototype {
     effect(() => {
       this.payments();
       this.rowSelection.set({});
-      this.detailId.set(null);
     });
   }
 
@@ -261,77 +191,7 @@ export class PaymentTablePrototype {
     this.table.getColumn('status')?.setFilterValue(item.id === ALL_STATUSES ? undefined : item.id);
   }
 
-  protected applyAmountFilter(): void {
-    const { currency, minimum, maximum } = this.amountForm.getRawValue();
-    const minOre = parseAmount(minimum);
-    const maxOre = parseAmount(maximum);
-    if (minOre === undefined || maxOre === undefined) {
-      this.reportAmountError('Indtast beløb uden tusindtalsseparator og med højst to decimaler.', [
-        ...(minOre === undefined ? (['minimum'] as const) : []),
-        ...(maxOre === undefined ? (['maximum'] as const) : []),
-      ]);
-      return;
-    }
-    if (minOre === null && maxOre === null) {
-      this.reportAmountError('Indtast mindst et beløb.', ['minimum', 'maximum']);
-      return;
-    }
-    if (!this.currencies.some((item) => item === currency)) {
-      this.reportAmountError('Vælg en valuta for beløbsfilteret.', ['currency']);
-      return;
-    }
-    if (minOre !== null && maxOre !== null && minOre > maxOre) {
-      this.reportAmountError('Det mindste beløb må ikke være større end det største.', [
-        'minimum',
-        'maximum',
-      ]);
-      return;
-    }
-    this.amountError.set(null);
-    this.amountErrorFields.set([]);
-    this.table
-      .getColumn('amount')!
-      .setFilterValue({ currency, minOre, maxOre } satisfies AmountFilter);
-  }
-
-  protected clearAmountFilter(): void {
-    this.amountForm.reset({ currency: '', minimum: '', maximum: '' });
-    this.amountError.set(null);
-    this.amountErrorFields.set([]);
-    this.table.getColumn('amount')!.setFilterValue(undefined);
-  }
-
-  private reportAmountError(message: string, fields: AmountField[]): void {
-    this.amountError.set(message);
-    this.amountErrorFields.set(fields);
-  }
-
-  protected openPayment(payment: PaymentRecord, event: Event): void {
-    const target = event.target;
-    if (
-      target instanceof HTMLElement &&
-      target.closest(
-        'button, a, input, select, textarea, [role="checkbox"], kirby-checkbox, kirby-data-grid-row-checkbox',
-      )
-    ) {
-      return;
-    }
-    this.returnFocus = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-    this.detailId.set(payment.id);
-    afterNextRender(() => this.detailsHeading()?.nativeElement.focus(), {
-      injector: this.injector,
-    });
-  }
-
-  protected onRowKeydown(payment: PaymentRecord, event: KeyboardEvent): void {
-    if (event.target !== event.currentTarget || !['Enter', ' '].includes(event.key)) return;
-    event.preventDefault();
-    this.openPayment(payment, event);
-  }
-
-  protected closeDetails(): void {
-    this.detailId.set(null);
-    if (this.returnFocus?.isConnected) this.returnFocus.focus();
-    else this.gridTable()?.nativeElement.focus();
+  protected setAmountFilter(filter: AmountFilter | null): void {
+    this.table.getColumn('amount')!.setFilterValue(filter ?? undefined);
   }
 }

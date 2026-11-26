@@ -71,6 +71,10 @@ creates the TanStack table with `injectTable` and registers its sorting,
 filtering and row-selection features. Kirby renders the accessible grid and
 selection checkboxes.
 
+`PaymentTablePrototype` owns the table state and coordinates filtering and
+selection. `PaymentAmountFilter` owns the amount form and validation.
+`PaymentStatusCell` renders the custom status cell.
+
 Sorting stays client-side, uses raw timestamps and amount values, and follows
 Danish collation for text. Each column cycles through ascending, descending and
 original order. Regenerating data keeps the active sort. The status chips use
@@ -90,11 +94,6 @@ comma or period as the decimal separator, at most two decimals, and no
 thousands separator. Invalid input leaves the last applied filter in place.
 Clearing the amount filter does not clear the status filter.
 
-The payment details panel remains a non-modal part of the POC. Click a row or
-focus it and press Enter or Space to open the panel. Close it with the button
-or Escape; focus returns to the row, or to the table if the row is filtered out.
-Selecting a checkbox does not open details.
-The panel sits beside the table on wider screens and below it at 960px or less.
 The table remains horizontally scrollable and renders every requested row.
 It does not paginate or virtualize large datasets. The independent Table
 Playground keeps its own renderer and controls.
