@@ -23,6 +23,7 @@ import {
   ColumnDef,
   ColumnFiltersState,
   FlexRender,
+  flexRenderComponent,
   functionalUpdate,
   injectTable,
   columnFilteringFeature,
@@ -43,6 +44,7 @@ import {
 } from '@kirbydesign/designsystem/data-grid';
 
 import { amountFormatter, dateFormatter, PAYMENT_CURRENCIES, PaymentRecord } from './payment-data';
+import { PaymentStatusCell } from './payment-status-cell';
 
 const collator = new Intl.Collator('da-DK', { numeric: true, sensitivity: 'base' });
 const integerFormatter = new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 });
@@ -103,7 +105,12 @@ const columns: ColumnDef<typeof features, PaymentRecord>[] = [
   { accessorKey: 'currency', header: 'Valuta' },
   { accessorKey: 'paymentType', header: 'Betalingstype' },
   { accessorKey: 'destinationAccount', header: 'Modtagerkonto' },
-  { accessorKey: 'status', header: 'Status' },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    cell: ({ row }) =>
+      flexRenderComponent(PaymentStatusCell, { inputs: { status: row.original.status } }),
+  },
 ];
 
 const sortFields: Record<string, keyof PaymentRecord> = {

@@ -78,6 +78,11 @@ TanStack's column-filter API and filter the generated rows locally. Selection
 uses stable payment IDs, survives sorting and filtering, and reports selected
 rows hidden by the current filter. Regenerating data clears selection.
 
+The status column renders a Kirby badge through TanStack's
+`flexRenderComponent`. Completed, pending and rejected payments use Kirby's
+success, warning and danger colors alongside their status text. Sorting and
+filtering continue to use the original status value.
+
 The amount filter combines with the status filter. Choose one currency and
 enter a lower bound, an upper bound or both. Bounds are inclusive and use
 minor-unit integer comparisons without currency conversion. Amounts accept a

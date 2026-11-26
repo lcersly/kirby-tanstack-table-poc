@@ -92,6 +92,34 @@ describe('PaymentOverviewPrototype', () => {
     );
   }
 
+  it('renders each payment status as a Kirby badge and keeps row details available', async () => {
+    const fixture = await createSmallOverview();
+    const root = fixture.nativeElement as HTMLElement;
+    const payments = createSyntheticPayments(30);
+    const colors: Record<string, string> = {
+      Gennemført: 'success',
+      Afventer: 'warning',
+      Afvist: 'danger',
+    };
+    const badges = Array.from(
+      root.querySelectorAll<HTMLElement>('tbody td[data-column-id="status"] kirby-badge'),
+    );
+
+    expect(new Set(payments.map((payment) => payment.status)).size).toBe(3);
+    expect(badges).toHaveLength(payments.length);
+    for (const [index, badge] of badges.entries()) {
+      expect(badge.textContent?.trim()).toBe(payments[index].status);
+      expect(badge.classList.contains(colors[payments[index].status])).toBe(true);
+    }
+
+    badges[0].click();
+    await fixture.whenStable();
+    expect(root.querySelector('.payment-details')?.textContent).toContain(
+      payments[0].destinationAccount,
+    );
+    expect(root.querySelector('.payment-details')?.textContent).toContain(payments[0].status);
+  });
+
   it('renders the seven payment headers and the initial 1,000-row dataset', async () => {
     const fixture = await createOverview();
     const root = fixture.nativeElement as HTMLElement;
