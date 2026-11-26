@@ -1,7 +1,7 @@
 # Kirby payment overview prototype
 
-This throwaway Angular prototype compares three desktop layouts for the
-read-only Danish payment overview in issue #6. It uses synthetic data and
+This throwaway Angular prototype demonstrates a read-only Danish payment
+overview using synthetic data and
 Kirby's experimental composable data grid.
 
 Run the local preview with:
@@ -18,12 +18,10 @@ The persistent top bar switches between two independent playspaces:
   a separate payment-table experiment with configurable controls. Its component
   is `src/app/table-playground.ts`; it does not share the POC's table or controls.
 
-In the POC, compare layouts A, B,
-and C with the floating switcher, the left and right arrow keys, or the
-`?variant=A`, `?variant=B`, and `?variant=C` query parameter.
-
-The default dataset has 1,000 rows. The generator accepts whole-number counts
-from 1 through 100,000. The table renders every requested row without
+The default dataset has 1,000 rows. Open **Generér datasæt** to change the
+dataset size. The generator accepts whole-number counts
+from 0 through 100,000. Zero leaves the grid empty; this data-grid build does
+not provide an empty-state presentation. The table renders every requested row without
 pagination or virtualization. Rendering 100,000 rows can make the browser slow
 or unresponsive. Use browser DevTools to inspect time and memory. This
 prototype does not connect to Firebase or use real payment data.
@@ -67,32 +65,24 @@ file by hand.
 
 The payment overview uses `DataGridComponent` and its table, header, row and
 cell directives from `@kirbydesign/designsystem/data-grid`. The application
-creates the TanStack table with `injectTable` and registers its sorting,
-filtering and row-selection features. Kirby renders the accessible grid and
+creates the TanStack table with `injectTable` and registers its sorting
+and row-selection features. Kirby renders the accessible grid and
 selection checkboxes.
 
-`PaymentTablePrototype` owns the table state and coordinates filtering and
-selection. `PaymentAmountFilter` owns the amount form and validation.
+`PaymentTablePrototype` owns the table state and coordinates sorting and
+selection.
 `PaymentStatusCell` renders the custom status cell.
 
 Sorting stays client-side, uses raw timestamps and amount values, and follows
 Danish collation for text. Each column cycles through ascending, descending and
-original order. Regenerating data keeps the active sort. The status chips use
-TanStack's column-filter API and filter the generated rows locally. Selection
-uses stable payment IDs, survives sorting and filtering, and reports selected
-rows hidden by the current filter. Regenerating data clears selection.
+original order. Regenerating data keeps the active sort. Selection
+uses stable payment IDs and survives sorting. Regenerating data clears selection.
+The prototype has no filtering controls while data-grid filtering is pending.
 
 The status column renders a Kirby badge through TanStack's
 `flexRenderComponent`. Completed, pending and rejected payments use Kirby's
-success, warning and danger colors alongside their status text. Sorting and
-filtering continue to use the original status value.
-
-The amount filter combines with the status filter. Choose one currency and
-enter a lower bound, an upper bound or both. Bounds are inclusive and use
-minor-unit integer comparisons without currency conversion. Amounts accept a
-comma or period as the decimal separator, at most two decimals, and no
-thousands separator. Invalid input leaves the last applied filter in place.
-Clearing the amount filter does not clear the status filter.
+success, warning and danger colors alongside their status text. Sorting
+continues to use the original status value.
 
 The table remains horizontally scrollable and renders every requested row.
 It does not paginate or virtualize large datasets. The independent Table

@@ -1,24 +1,8 @@
 <div class="table-toolbar">
-  <kirby-segmented-control
-    mode="chip"
-    size="sm"
-    [items]="statusItems"
-    [selectedIndex]="statusFilterIndex()"
-    aria-label="Filtrer betalinger efter status"
-    (segmentSelect)="onStatusSelect($event)"
-  ></kirby-segmented-control>
   <p aria-live="polite">
     {{ selectedCount() }} {{ selectedCount() === 1 ? 'valgt' : 'valgte' }}
-    @if (hiddenSelectedCount()) {
-      , {{ hiddenSelectedCount() }} skjult af filteret
-    }
   </p>
 </div>
-
-<app-payment-amount-filter
-  [activeFilter]="activeAmountFilter()"
-  (filterChange)="setAmountFilter($event)"
-/>
 
 <div class="data-grid-layout">
   <kirby-data-grid [table]="table" label="Syntetiske betalinger">
@@ -55,6 +39,3 @@
     </table>
   </kirby-data-grid>
 </div>
-@if (!filteredAndSortedPayments().length) {
-  <p role="status">Ingen betalinger matcher de valgte filtre.</p>
-}
