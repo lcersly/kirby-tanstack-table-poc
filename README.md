@@ -57,48 +57,51 @@ change global npm configuration. Replace the package and version in this
 example with the dependency you are upgrading and its chosen release:
 
 ```sh
-npm install --save-exact @kirbydesign/core@0.0.94-dev-f528d7a @kirbydesign/designsystem@11.11.2-dev-f528d7a @kirbydesign/extensions-angular@5.0.1-dev-f528d7a --registry=https://registry.npmjs.org
+npm install --save-exact @kirbydesign/core@0.0.99-dev-194f885 @kirbydesign/designsystem@12.2.0-dev-194f885 @kirbydesign/extensions-angular@6.2.0-dev-194f885 @ionic/angular@9.0.5 --registry=https://registry.npmjs.org --@kirbydesign:registry=https://registry.npmjs.org
 ```
 
 Then run the checks above and commit both dependency files. Do not edit the lock
 file by hand.
 
-## Composable grid integration
+## Data grid integration
 
-The POC's `PaymentTablePrototype` projects its own semantic table into
-`kirby-data-grid-composable`, imported from
-`@kirbydesign/designsystem/data-grid-composable`. Kirby owns the table instance,
-header/cell rendering and horizontal scroll container. The seven columns,
-Danish formatting, A/B/C layouts and row-count generator remain unchanged.
-Each header cycles through ascending, descending and original order.
-Dates sort chronologically and amounts numerically using the raw generated
-values, while text uses Danish collation with natural account-number ordering.
-Sorting does not edit the data, and regenerating rows retains the selected sort.
-The projected table is keyboard-focusable so its horizontally scrolling content
-remains accessible on narrow screens.
-`src/styles.scss` imports Kirby's global styles once. The table uses Kirby's
-header, cell and row styling without the temporary renderer's uppercase headers,
-backgrounds or zebra stripes.
+The payment overview uses `DataGridComponent` and its table, header, row and
+cell directives from `@kirbydesign/designsystem/data-grid`. The application
+creates the TanStack table with `injectTable` and registers its sorting,
+filtering and row-selection features. Kirby renders the accessible grid and
+selection checkboxes.
 
-This uses the experimental packages from
-[kirbydesign/designsystem#4898](https://github.com/kirbydesign/designsystem/pull/4898),
-not the separate `kirby-data-grid` component. The draft's actual selector is
-`kirby-data-grid-composable`. It does not provide pagination or virtualization;
-the POC still renders every generated row.
-Click a payment row or focus it and press Enter or Space to open Kirby's
-composed side panel with its existing payment details. Close with the button
-or Escape; focus returns to the selected row. Regenerating data closes stale
-details. The panel remains non-modal, so sorting is available while it is open.
-Kirby's native layout places the panel beside the table on desktop and below
-it on screens up to 960px; opening details moves focus to the panel heading.
-The independent Table Playground keeps its existing renderer and controls.
+Sorting stays client-side, uses raw timestamps and amount values, and follows
+Danish collation for text. Each column cycles through ascending, descending and
+original order. Regenerating data keeps the active sort. The status chips use
+TanStack's column-filter API and filter the generated rows locally. Selection
+uses stable payment IDs, survives sorting and filtering, and reports selected
+rows hidden by the current filter. Regenerating data clears selection.
 
-The dev designsystem requires Ionic Angular **9.0.2** exactly.
-`@angular/platform-browser-dynamic` satisfies the extensions package's peer
-dependency. TanStack remains installed as a required Kirby peer, but the POC
-no longer imports it or creates its own table instance.
+The amount filter combines with the status filter. Choose one currency and
+enter a lower bound, an upper bound or both. Bounds are inclusive and use
+minor-unit integer comparisons without currency conversion. Amounts accept a
+comma or period as the decimal separator, at most two decimals, and no
+thousands separator. Invalid input leaves the last applied filter in place.
+Clearing the amount filter does not clear the status filter.
+
+The payment details panel remains a non-modal part of the POC. Click a row or
+focus it and press Enter or Space to open the panel. Close it with the button
+or Escape; focus returns to the row, or to the table if the row is filtered out.
+Selecting a checkbox does not open details.
+The panel sits beside the table on wider screens and below it at 960px or less.
+The table remains horizontally scrollable and renders every requested row.
+It does not paginate or virtualize large datasets. The independent Table
+Playground keeps its own renderer and controls.
+
+The POC uses the public dev build from
+[kirbydesign/designsystem#4983](https://github.com/kirbydesign/designsystem/pull/4983).
+That package exports `@kirbydesign/designsystem/data-grid` and requires
+`@kirbydesign/core@0.0.99-dev-194f885`, `@tanstack/angular-table@^9.3.1`, and
+`@ionic/angular@9.0.5`. The matching extensions package is pinned to
+`6.2.0-dev-194f885`. `src/styles.scss` imports Kirby's global styles once.
 
 The Vitest configuration inlines Kirby modules so the existing unit-test
-mocks for UI controls and icons also apply inside the real composable grid.
+mocks for UI controls and icons also apply inside the real data grid.
 This avoids loading Ionic's browser-only modules in jsdom while still testing
 Kirby's table model and cell/header rendering.

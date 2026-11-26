@@ -1,8 +1,11 @@
+import { getDebugNode, LOCALE_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
-import { ComposableDataGridComponent } from '@kirbydesign/designsystem/data-grid-composable';
-import { describe, expect, it, vi } from 'vitest';
+import { SegmentedControlComponent } from '@kirbydesign/designsystem/segmented-control';
+import { DataGridComponent } from '@kirbydesign/designsystem/data-grid';
+import { DropdownComponent } from '@kirbydesign/designsystem/dropdown';
+import { describe, expect, it } from 'vitest';
 
 import { DEMO_COMMIT, KIRBY_VERSION } from './demo-commit.generated';
 import { createSyntheticPayments } from './payment-data';
@@ -18,12 +21,16 @@ vi.mock('@kirbydesign/designsystem/button', async () => {
 });
 
 vi.mock('@kirbydesign/designsystem/form-field', async () => {
-  const { Directive } = await import('@angular/core');
+  const { Component, Directive, input } = await import('@angular/core');
 
   class MockInputComponent {}
-  Directive({ selector: 'input[kirby-input]' })(MockInputComponent);
+  Directive({ selector: 'input[kirby-input]', inputs: ['hasError'] })(MockInputComponent);
+  class MockFormFieldComponent {
+    readonly label = input('');
+  }
+  Component({ selector: 'kirby-form-field', template: '<ng-content />' })(MockFormFieldComponent);
 
-  return { InputComponent: MockInputComponent };
+  return { InputComponent: MockInputComponent, FormFieldComponent: MockFormFieldComponent };
 });
 
 vi.mock('@kirbydesign/designsystem/icon', async () => {
@@ -39,7 +46,7 @@ describe('PaymentOverviewPrototype', () => {
   async function createOverview() {
     await TestBed.configureTestingModule({
       imports: [PaymentOverviewPrototype],
-      providers: [provideRouter([])],
+      providers: [provideRouter([]), { provide: LOCALE_ID, useValue: 'da-DK' }],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(PaymentOverviewPrototype);
@@ -47,18 +54,70 @@ describe('PaymentOverviewPrototype', () => {
     return fixture;
   }
 
+  async function createSmallOverview() {
+    const fixture = await createOverview();
+    const root = fixture.nativeElement as HTMLElement;
+    const count = root.querySelector<HTMLInputElement>('#payment-count')!;
+    count.value = '30';
+    count.dispatchEvent(new Event('input', { bubbles: true }));
+    root.querySelector<HTMLButtonElement>('button[kirby-button]')!.click();
+    await fixture.whenStable();
+    return fixture;
+  }
+
+  function setAmountField(root: HTMLElement, name: string, value: string) {
+    if (name === 'currency') {
+      const dropdown = getDebugNode(
+        root.querySelector('kirby-dropdown[formControlName="currency"]')!,
+      )?.componentInstance;
+      if (!(dropdown instanceof DropdownComponent)) throw new Error('Currency dropdown missing.');
+      dropdown.onItemSelect(['DKK', 'EUR', 'SEK', 'USD'].indexOf(value));
+      return;
+    }
+    const field = root.querySelector<HTMLInputElement>(`[formControlName="${name}"]`)!;
+    field.value = value;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function submitAmount(root: HTMLElement) {
+    root
+      .querySelector('form.amount-filter')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  }
+
+  function visibleAccounts(root: HTMLElement) {
+    return Array.from(
+      root.querySelectorAll('tbody td[data-column-id="destinationAccount"]'),
+      (cell) => cell.textContent?.trim(),
+    );
+  }
+
   it('renders the seven payment headers and the initial 1,000-row dataset', async () => {
     const fixture = await createOverview();
     const root = fixture.nativeElement as HTMLElement;
 
-    expect(fixture.debugElement.query(By.directive(ComposableDataGridComponent))).not.toBeNull();
+    expect(fixture.debugElement.query(By.directive(DataGridComponent))).not.toBeNull();
     expect(root.querySelector('table[kirbyDataGridTable]')).not.toBeNull();
     expect(root.querySelector('table')?.tabIndex).toBe(0);
-    expect(root.querySelectorAll('th[kirby-data-grid-header-cell]')).toHaveLength(7);
-    expect(root.querySelectorAll('td[kirby-data-grid-cell]')).toHaveLength(7_000);
-    expect(root.querySelectorAll('thead button')).toHaveLength(7);
+    expect(root.querySelectorAll('th[data-column-id]')).toHaveLength(8);
+    expect(root.querySelectorAll('td[data-column-id]')).toHaveLength(8_000);
+    expect(root.querySelectorAll('thead th.sortable button')).toHaveLength(7);
+    expect(root.querySelector('thead th[data-column-id="select"]')?.textContent?.trim()).toBe(
+      'Vælg alle rækker',
+    );
+    expect(root.querySelector('tbody td[data-column-id="select"]')?.textContent).toContain(
+      'Vælg betaling til Kystens Gartneri',
+    );
     expect(
-      Array.from(root.querySelectorAll('thead th'), (header) => header.textContent?.trim()),
+      [
+        'date',
+        'recipient',
+        'amount',
+        'currency',
+        'paymentType',
+        'destinationAccount',
+        'status',
+      ].map((id) => root.querySelector(`thead th[data-column-id="${id}"]`)?.textContent?.trim()),
     ).toEqual(['Dato', 'Modtager', 'Beløb', 'Valuta', 'Betalingstype', 'Modtagerkonto', 'Status']);
     expect(root.querySelectorAll('tbody tr')).toHaveLength(1_000);
     expect(root.querySelector('.result-summary')?.textContent).toContain(
@@ -88,10 +147,18 @@ describe('PaymentOverviewPrototype', () => {
       row.textContent?.trim(),
     );
     expect(firstRender).toHaveLength(4);
-    expect(root.querySelectorAll('td[kirby-data-grid-cell]')).toHaveLength(28);
+    expect(root.querySelectorAll('td[data-column-id]')).toHaveLength(32);
     expect(
       Array.from(root.querySelectorAll('tbody tr'), (row) =>
-        Array.from(row.querySelectorAll('td'), (cell) => cell.textContent?.trim()),
+        [
+          'date',
+          'recipient',
+          'amount',
+          'currency',
+          'paymentType',
+          'destinationAccount',
+          'status',
+        ].map((id) => row.querySelector(`td[data-column-id="${id}"]`)?.textContent?.trim()),
       ),
     ).toEqual(
       createSyntheticPayments(4).map((payment) => [
@@ -161,7 +228,7 @@ describe('PaymentOverviewPrototype', () => {
     root.querySelector<HTMLButtonElement>('button[kirby-button]')!.click();
     await fixture.whenStable();
 
-    const headers = Array.from(root.querySelectorAll('thead th'));
+    const headers = Array.from(root.querySelectorAll('thead th[data-column-id]'));
     const header = headers.find((element) => element.textContent?.trim() === label)!;
     const button = header.querySelector('button')!;
     const original = createSyntheticPayments(20);
@@ -173,9 +240,11 @@ describe('PaymentOverviewPrototype', () => {
         : String(av).localeCompare(String(bv), 'da-DK', { numeric: true, sensitivity: 'base' });
     });
     const accounts = () =>
-      Array.from(root.querySelectorAll('tbody tr'), (row) => row.children[5].textContent?.trim());
+      Array.from(root.querySelectorAll('tbody td[data-column-id="destinationAccount"]'), (cell) =>
+        cell.textContent?.trim(),
+      );
 
-    expect(header.getAttribute('aria-sort')).toBe('none');
+    expect(header.hasAttribute('aria-sort')).toBe(false);
     button.click();
     await fixture.whenStable();
     expect(header.getAttribute('aria-sort')).toBe('ascending');
@@ -198,20 +267,21 @@ describe('PaymentOverviewPrototype', () => {
 
     button.click();
     await fixture.whenStable();
-    expect(header.getAttribute('aria-sort')).toBe('none');
+    expect(header.hasAttribute('aria-sort')).toBe(false);
     expect(accounts()).toEqual(original.map((payment) => payment.destinationAccount));
   });
 
   it('switches the sorted column and keeps its sort when regenerating rows', async () => {
     const fixture = await createOverview();
     const root = fixture.nativeElement as HTMLElement;
-    const headers = root.querySelectorAll('thead th');
-    headers[0].querySelector('button')!.click();
+    const dateHeader = root.querySelector('thead th[data-column-id="date"]')!;
+    const amountHeader = root.querySelector('thead th[data-column-id="amount"]')!;
+    dateHeader.querySelector('button')!.click();
     await fixture.whenStable();
-    headers[2].querySelector('button')!.click();
+    amountHeader.querySelector('button')!.click();
     await fixture.whenStable();
-    expect(headers[0].getAttribute('aria-sort')).toBe('none');
-    expect(headers[2].getAttribute('aria-sort')).toBe('ascending');
+    expect(dateHeader.hasAttribute('aria-sort')).toBe(false);
+    expect(amountHeader.getAttribute('aria-sort')).toBe('ascending');
 
     const input = root.querySelector<HTMLInputElement>('#payment-count')!;
     input.value = '4';
@@ -219,9 +289,11 @@ describe('PaymentOverviewPrototype', () => {
     root.querySelector<HTMLButtonElement>('button[kirby-button]')!.click();
     await fixture.whenStable();
 
-    expect(headers[2].getAttribute('aria-sort')).toBe('ascending');
+    expect(amountHeader.getAttribute('aria-sort')).toBe('ascending');
     expect(
-      Array.from(root.querySelectorAll('tbody tr'), (row) => row.children[2].textContent?.trim()),
+      Array.from(root.querySelectorAll('tbody td[data-column-id="amount"]'), (cell) =>
+        cell.textContent?.trim(),
+      ),
     ).toEqual(
       createSyntheticPayments(4)
         .sort((a, b) => a.amountInOre - b.amountInOre)
@@ -238,7 +310,7 @@ describe('PaymentOverviewPrototype', () => {
     row.click();
     await fixture.whenStable();
 
-    const panel = root.querySelector<HTMLElement>('[kirbyDataGridSidePanel]')!;
+    const panel = root.querySelector<HTMLElement>('.payment-details')!;
     expect(panel.querySelector('h2')?.textContent).toBe('Betalingsdetaljer');
     expect(
       Array.from(panel.querySelectorAll('dd'), (element) => element.textContent?.trim()),
@@ -253,12 +325,12 @@ describe('PaymentOverviewPrototype', () => {
     expect(document.activeElement).toBe(panel.querySelector('h2'));
     expect(row.classList.contains('payment-row-selected')).toBe(true);
 
-    root.querySelectorAll('thead th')[2].querySelector('button')!.click();
+    root.querySelector<HTMLButtonElement>('thead th[data-column-id="amount"] button')!.click();
     await fixture.whenStable();
     expect(panel.textContent).toContain(payment.destinationAccount);
     panel.querySelector('button')!.click();
     await fixture.whenStable();
-    expect(panel.querySelector('h2')).toBeNull();
+    expect(root.querySelector('.payment-details h2')).toBeNull();
     expect(document.activeElement).toBe(row);
     expect(row.classList.contains('payment-row-selected')).toBe(false);
   });
@@ -293,8 +365,192 @@ describe('PaymentOverviewPrototype', () => {
     await fixture.whenStable();
     expect(root.querySelectorAll('tbody tr')).toHaveLength(4);
     expect(root.querySelector('#payment-details-heading')).toBeNull();
-    const grid = fixture.debugElement.query(By.directive(ComposableDataGridComponent))
-      .componentInstance as ComposableDataGridComponent;
-    expect(grid.sidePanelOpen()).toBe(false);
+  });
+
+  it('filters by status and keeps selected rows hidden by the filter', async () => {
+    const fixture = await createOverview();
+    const root = fixture.nativeElement as HTMLElement;
+    const countInput = root.querySelector<HTMLInputElement>('#payment-count')!;
+    countInput.value = '20';
+    countInput.dispatchEvent(new Event('input', { bubbles: true }));
+    root.querySelector<HTMLButtonElement>('button[kirby-button]')!.click();
+    await fixture.whenStable();
+
+    const payments = createSyntheticPayments(20);
+    const selectedPayment = payments[0];
+    const otherStatus = payments.find(
+      (payment) => payment.status !== selectedPayment.status,
+    )!.status;
+    root
+      .querySelector<HTMLElement>('tbody td[data-column-id="select"] kirby-data-grid-row-checkbox')!
+      .click();
+    await fixture.whenStable();
+    expect(root.querySelector('.payment-details')).toBeNull();
+
+    fixture.debugElement
+      .query(By.directive(SegmentedControlComponent))
+      .triggerEventHandler('segmentSelect', { id: otherStatus, text: otherStatus });
+    fixture.detectChanges();
+
+    const visiblePayments = payments.filter((payment) => payment.status === otherStatus);
+    expect(root.querySelectorAll('tbody tr')).toHaveLength(visiblePayments.length);
+    expect(
+      Array.from(root.querySelectorAll('tbody tr'), (row) =>
+        row.textContent?.includes(otherStatus),
+      ).every(Boolean),
+    ).toBe(true);
+    expect(root.querySelector('.table-toolbar')?.textContent).toContain('1 valgt');
+    expect(root.querySelector('.table-toolbar')?.textContent).toContain('1 skjult af filteret');
+  });
+
+  it('filters inclusive numeric ranges in one currency, including optional bounds and no matches', async () => {
+    const fixture = await createSmallOverview();
+    const root = fixture.nativeElement as HTMLElement;
+    const payments = createSyntheticPayments(30);
+    const currency = payments[0].currency;
+    const matching = payments
+      .filter((payment) => payment.currency === currency)
+      .sort((a, b) => a.amountInOre - b.amountInOre);
+    expect(matching.length).toBeGreaterThan(2);
+    const lower = matching[1].amountInOre;
+    const upper = matching[matching.length - 2].amountInOre;
+    const decimal = (amount: number) =>
+      `${Math.floor(amount / 100)},${String(amount % 100).padStart(2, '0')}`;
+
+    setAmountField(root, 'currency', currency);
+    setAmountField(root, 'minimum', decimal(lower));
+    setAmountField(root, 'maximum', decimal(upper).replace(',', '.'));
+    submitAmount(root);
+    await fixture.whenStable();
+    expect(visibleAccounts(root)).toEqual(
+      payments
+        .filter(
+          (payment) =>
+            payment.currency === currency &&
+            payment.amountInOre >= lower &&
+            payment.amountInOre <= upper,
+        )
+        .map((payment) => payment.destinationAccount),
+    );
+    expect(root.querySelector('.amount-filter')?.textContent).toContain(currency);
+
+    setAmountField(root, 'minimum', '');
+    submitAmount(root);
+    await fixture.whenStable();
+    expect(visibleAccounts(root)).toEqual(
+      payments
+        .filter((payment) => payment.currency === currency && payment.amountInOre <= upper)
+        .map((payment) => payment.destinationAccount),
+    );
+
+    setAmountField(root, 'minimum', decimal(lower));
+    setAmountField(root, 'maximum', '');
+    submitAmount(root);
+    await fixture.whenStable();
+    expect(visibleAccounts(root)).toEqual(
+      payments
+        .filter((payment) => payment.currency === currency && payment.amountInOre >= lower)
+        .map((payment) => payment.destinationAccount),
+    );
+
+    setAmountField(root, 'minimum', '90071992547409,91');
+    submitAmount(root);
+    await fixture.whenStable();
+    expect(root.querySelectorAll('tbody tr')).toHaveLength(0);
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Ingen betalinger');
+    expect(root.querySelector('.amount-filter [aria-live]')?.textContent).toContain(
+      '90.071.992.547.409,91',
+    );
+  });
+
+  it('reports invalid amounts, missing currency and reversed bounds without changing the active filter', async () => {
+    const fixture = await createSmallOverview();
+    const root = fixture.nativeElement as HTMLElement;
+    const currency = createSyntheticPayments(30)[0].currency;
+    setAmountField(root, 'currency', currency);
+    setAmountField(root, 'minimum', '0');
+    submitAmount(root);
+    await fixture.whenStable();
+    const previous = visibleAccounts(root);
+    const summary = root.querySelector('.amount-filter [aria-live]')?.textContent;
+
+    for (const invalid of ['-1', '1,234', '1.000,00', 'abc', '90071992547409,92']) {
+      setAmountField(root, 'minimum', invalid);
+      submitAmount(root);
+      await fixture.whenStable();
+      expect(root.querySelector('#amount-error')?.textContent).toContain('højst to decimaler');
+      expect(
+        root.querySelector('[formControlName="minimum"]')?.getAttribute('aria-describedby'),
+      ).toBe('amount-error');
+      expect(visibleAccounts(root)).toEqual(previous);
+      expect(root.querySelector('.amount-filter [aria-live]')?.textContent).toBe(summary);
+    }
+
+    setAmountField(root, 'minimum', '2');
+    setAmountField(root, 'maximum', '1');
+    submitAmount(root);
+    await fixture.whenStable();
+    expect(root.querySelector('#amount-error')?.textContent).toContain('må ikke være større');
+    expect(visibleAccounts(root)).toEqual(previous);
+
+    setAmountField(root, 'maximum', '');
+    setAmountField(root, 'currency', '');
+    submitAmount(root);
+    await fixture.whenStable();
+    expect(root.querySelector('#amount-error')?.textContent).toContain('Vælg en valuta');
+    setAmountField(root, 'minimum', '');
+    submitAmount(root);
+    await fixture.whenStable();
+    expect(root.querySelector('#amount-error')?.textContent).toContain('mindst et beløb');
+    expect(visibleAccounts(root)).toEqual(previous);
+  });
+
+  it('combines amount and status filters while preserving sorting, selection and details', async () => {
+    const fixture = await createSmallOverview();
+    const root = fixture.nativeElement as HTMLElement;
+    const payments = createSyntheticPayments(30);
+    const selected = payments[0];
+    const currency = payments.find((payment) => payment.currency !== selected.currency)!.currency;
+    const row = root.querySelector<HTMLTableRowElement>('tbody tr')!;
+    row.querySelector<HTMLElement>('kirby-data-grid-row-checkbox')!.click();
+    row.click();
+    await fixture.whenStable();
+    root.querySelector<HTMLButtonElement>('thead th[data-column-id="amount"] button')!.click();
+    fixture.debugElement
+      .query(By.directive(SegmentedControlComponent))
+      .triggerEventHandler('segmentSelect', { id: selected.status, text: selected.status });
+    setAmountField(root, 'currency', currency);
+    setAmountField(root, 'minimum', '0');
+    submitAmount(root);
+    await fixture.whenStable();
+
+    expect(visibleAccounts(root)).toEqual(
+      payments
+        .filter((payment) => payment.currency === currency && payment.status === selected.status)
+        .sort((a, b) => a.amountInOre - b.amountInOre)
+        .map((payment) => payment.destinationAccount),
+    );
+    expect(root.querySelector('.table-toolbar')?.textContent).toContain('1 skjult af filteret');
+    expect(root.querySelector('.payment-details')?.textContent).toContain(
+      selected.destinationAccount,
+    );
+    root.querySelector<HTMLButtonElement>('.payment-details button')!.click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(root.querySelector('table'));
+
+    root.querySelector<HTMLButtonElement>('.amount-filter button[type="button"]')!.click();
+    await fixture.whenStable();
+    expect(visibleAccounts(root)).toEqual(
+      payments
+        .filter((payment) => payment.status === selected.status)
+        .sort((a, b) => a.amountInOre - b.amountInOre)
+        .map((payment) => payment.destinationAccount),
+    );
+    expect(root.querySelector('.table-toolbar')?.textContent).toContain('1 valgt');
+    expect(root.querySelector('.table-toolbar')?.textContent).not.toContain('skjult');
+    expect(root.querySelector('.amount-filter [aria-live]')?.textContent).toContain('Intet aktivt');
+    expect(root.querySelector('thead th[data-column-id="amount"]')?.getAttribute('aria-sort')).toBe(
+      'ascending',
+    );
   });
 });

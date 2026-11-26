@@ -20,12 +20,16 @@ vi.mock('@kirbydesign/designsystem/button', async () => {
 });
 
 vi.mock('@kirbydesign/designsystem/form-field', async () => {
-  const { Directive } = await import('@angular/core');
+  const { Component, Directive, input } = await import('@angular/core');
 
   class MockInputComponent {}
-  Directive({ selector: 'input[kirby-input]' })(MockInputComponent);
+  Directive({ selector: 'input[kirby-input]', inputs: ['hasError'] })(MockInputComponent);
+  class MockFormFieldComponent {
+    readonly label = input('');
+  }
+  Component({ selector: 'kirby-form-field', template: '<ng-content />' })(MockFormFieldComponent);
 
-  return { InputComponent: MockInputComponent };
+  return { InputComponent: MockInputComponent, FormFieldComponent: MockFormFieldComponent };
 });
 
 vi.mock('@kirbydesign/designsystem/icon', async () => {
@@ -86,9 +90,7 @@ describe('Playspace navigation', () => {
     expect(root.querySelector('h1')?.textContent).toBe('Table Playground');
     expect(root.querySelector('main')?.children).toHaveLength(1);
     expect(root.querySelector('table')).toBeNull();
-    expect(root.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(
-      "Lab's Lab",
-    );
+    expect(root.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe("Lab's Lab");
     expect(document.title).toBe('Table Playground');
     expect(document.activeElement).toBe(root.querySelector('#playspace-content'));
   });
