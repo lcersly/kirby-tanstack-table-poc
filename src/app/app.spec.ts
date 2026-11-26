@@ -3,6 +3,7 @@ import { Location } from '@angular/common';
 import { provideLocationMocks } from '@angular/common/testing';
 import { TestBed } from '@angular/core/testing';
 import { NavigationEnd, provideRouter, Router, Routes } from '@angular/router';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { filter, firstValueFrom } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -36,12 +37,14 @@ vi.mock('@kirbydesign/designsystem/form-field', async () => {
 });
 
 vi.mock('@kirbydesign/designsystem/icon', async () => {
-  const { Directive } = await import('@angular/core');
+  const { Directive, NgModule } = await import('@angular/core');
 
   class MockIconComponent {}
   Directive({ selector: 'kirby-icon' })(MockIconComponent);
+  class MockIconModule {}
+  NgModule({ imports: [MockIconComponent], exports: [MockIconComponent] })(MockIconModule);
 
-  return { IconComponent: MockIconComponent };
+  return { IconComponent: MockIconComponent, IconModule: MockIconModule };
 });
 
 @Component({
@@ -70,6 +73,7 @@ describe('Playspace navigation', () => {
       providers: [
         provideRouter([{ path: '', component: App, children: testRoutes }]),
         provideLocationMocks(),
+        provideNoopAnimations(),
       ],
     });
     TestBed.overrideComponent(PaymentOverviewPrototype, {
@@ -124,7 +128,7 @@ describe('Playspace navigation', () => {
   });
 
   it('keeps the top bar when switching playspaces and supports browser history', async () => {
-    const { harness, root, router } = await openApp('/prototype/payment-overview?variant=C');
+    const { harness, root, router } = await openApp('/prototype/payment-overview');
     const nav = root.querySelector('nav');
     const playgroundLink = root.querySelector<HTMLAnchorElement>(
       'a[href="/prototype/table-playground"]',
@@ -181,11 +185,12 @@ describe('Playspace navigation', () => {
     expect(pocLink.getAttribute('aria-current')).toBe('page');
   });
 
-  it('keeps the POC variant query parameter on direct links', async () => {
+  it('uses the standard POC layout for old variant links without a layout switcher', async () => {
     const { root, router } = await openApp('/prototype/payment-overview?variant=C');
 
     expect(router.url).toBe('/prototype/payment-overview?variant=C');
-    expect(root.querySelector('.variant-c')).not.toBeNull();
+    expect(root.querySelector('.prototype-shell')).not.toBeNull();
+    expect(root.querySelector('.prototype-switcher')).toBeNull();
     expect(root.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('POC');
   });
 
