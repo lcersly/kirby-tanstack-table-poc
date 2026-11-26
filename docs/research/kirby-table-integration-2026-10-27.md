@@ -1,5 +1,24 @@
 # Kirby table integration research
 
+## Current status, 2026-11-26
+
+The POC now uses `@kirbydesign/designsystem@12.2.0-dev-194f885` and
+`@kirbydesign/core@0.0.99-dev-194f885`, matching the published build linked to
+[designsystem#4983](https://github.com/kirbydesign/designsystem/pull/4983).
+That package exports `@kirbydesign/designsystem/data-grid`; it replaces the
+older `data-grid-composable` entry.
+
+The cookbook example registers TanStack's `rowSortingFeature`,
+`columnFilteringFeature` and `rowSelectionFeature`. The POC now uses all three.
+It sorts and filters generated rows locally, provides status chips for
+filtering, and uses Kirby's selection-column helper. Sorting still cycles
+through ascending, descending and original order. Payment details remain in a
+custom side panel because the new grid API does not include the composable
+grid's side-panel directive.
+
+The earlier migration notes below describe the older composable-grid release
+and are retained as historical findings.
+
 ## Migration update, 2026-11-02
 
 The historical findings below predate

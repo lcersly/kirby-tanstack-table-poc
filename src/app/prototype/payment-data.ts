@@ -1,4 +1,5 @@
 export interface PaymentRecord {
+  readonly id: string;
   readonly dateTimestamp: number;
   readonly amountInOre: number;
   readonly date: string;
@@ -36,13 +37,8 @@ const recipients = [
   'Skovvang Kontorfællesskab',
   'Søholm Transport',
 ];
-const currencies = ['DKK', 'EUR', 'SEK', 'USD'];
-const paymentTypes = [
-  'Overførsel',
-  'Indenlandsk betaling',
-  'Udenlandsk betaling',
-  'Løn',
-];
+export const PAYMENT_CURRENCIES = ['DKK', 'EUR', 'SEK', 'USD'] as const;
+const paymentTypes = ['Overførsel', 'Indenlandsk betaling', 'Udenlandsk betaling', 'Løn'];
 const statuses = ['Gennemført', 'Afventer', 'Afvist'];
 
 export function createSyntheticPayments(count: number): PaymentRecord[] {
@@ -54,19 +50,20 @@ export function createSyntheticPayments(count: number): PaymentRecord[] {
     return (state >>> 0) / 0x1_0000_0000;
   };
 
-  return Array.from({ length: count }, () => {
+  return Array.from({ length: count }, (_, index) => {
     const daysAgo = Math.floor(next() * 366);
     const paymentDate = new Date(referenceDate - daysAgo * millisecondsPerDay);
     const amountInOre = 1_000 + Math.floor(next() * 2_500_000);
     const accountNumber = 10_000_000 + Math.floor(next() * 90_000_000);
 
     return {
+      id: `payment-${index + 1}`,
       dateTimestamp: paymentDate.getTime(),
       amountInOre,
       date: dateFormatter.format(paymentDate),
       recipient: recipients[Math.floor(next() * recipients.length)],
       amount: amountFormatter.format(amountInOre / 100),
-      currency: currencies[Math.floor(next() * currencies.length)],
+      currency: PAYMENT_CURRENCIES[Math.floor(next() * PAYMENT_CURRENCIES.length)],
       paymentType: paymentTypes[Math.floor(next() * paymentTypes.length)],
       destinationAccount: `0000 ${accountNumber}`,
       status: statuses[Math.floor(next() * statuses.length)],

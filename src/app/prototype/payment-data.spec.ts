@@ -13,6 +13,7 @@ describe('createSyntheticPayments', () => {
 
   it('uses the fixed reference date and expected payment fields', () => {
     expect(createSyntheticPayments(1)[0]).toEqual({
+      id: 'payment-1',
       dateTimestamp: Date.UTC(2026, 6, 27),
       amountInOre: 1_425_562,
       date: '27. jul. 2026',

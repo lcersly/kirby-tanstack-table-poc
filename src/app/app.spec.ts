@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, input } from '@angular/core';
 import { Location } from '@angular/common';
 import { provideLocationMocks } from '@angular/common/testing';
 import { TestBed } from '@angular/core/testing';
@@ -9,6 +9,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { App } from './app';
 import { routes } from './app.routes';
+import { PaymentRecord } from './prototype/payment-data';
+import { PaymentOverviewPrototype } from './prototype/payment-overview';
+import { PaymentTablePrototype } from './prototype/payment-table';
 
 vi.mock('@kirbydesign/designsystem/button', async () => {
   const { Directive } = await import('@angular/core');
@@ -20,12 +23,16 @@ vi.mock('@kirbydesign/designsystem/button', async () => {
 });
 
 vi.mock('@kirbydesign/designsystem/form-field', async () => {
-  const { Directive } = await import('@angular/core');
+  const { Component, Directive, input } = await import('@angular/core');
 
   class MockInputComponent {}
-  Directive({ selector: 'input[kirby-input]' })(MockInputComponent);
+  Directive({ selector: 'input[kirby-input]', inputs: ['hasError'] })(MockInputComponent);
+  class MockFormFieldComponent {
+    readonly label = input('');
+  }
+  Component({ selector: 'kirby-form-field', template: '<ng-content />' })(MockFormFieldComponent);
 
-  return { InputComponent: MockInputComponent };
+  return { InputComponent: MockInputComponent, FormFieldComponent: MockFormFieldComponent };
 });
 
 vi.mock('@kirbydesign/designsystem/icon', async () => {
@@ -43,7 +50,14 @@ vi.mock('@kirbydesign/designsystem/icon', async () => {
 })
 class StubTablePlayground {}
 
-// Data Grid kræver Kirby/Ionic og indlæses derfor ikke i enhedstests
+@Component({
+  selector: 'app-prototype-payment-table',
+  template: '<span data-payment-count>{{ payments().length }}</span>',
+})
+class StubPaymentTable {
+  readonly payments = input.required<PaymentRecord[]>();
+}
+
 const testRoutes: Routes = routes.map((route) =>
   route.path === 'prototype/table-playground'
     ? { path: route.path, title: route.title, component: StubTablePlayground }
@@ -57,6 +71,10 @@ describe('Playspace navigation', () => {
         provideRouter([{ path: '', component: App, children: testRoutes }]),
         provideLocationMocks(),
       ],
+    });
+    TestBed.overrideComponent(PaymentOverviewPrototype, {
+      remove: { imports: [PaymentTablePrototype] },
+      add: { imports: [StubPaymentTable] },
     });
 
     const router = TestBed.inject(Router);
@@ -75,7 +93,7 @@ describe('Playspace navigation', () => {
 
     expect(router.url).toBe('/prototype/payment-overview');
     expect(root.querySelector('h1')?.textContent).toBe('Betalingsoversigt');
-    expect(root.querySelectorAll('tbody tr')).toHaveLength(1_000);
+    expect(root.querySelector('[data-payment-count]')?.textContent).toBe('1000');
     expect(root.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('POC');
     expect(document.title).toBe('POC');
   });
@@ -86,9 +104,7 @@ describe('Playspace navigation', () => {
     expect(root.querySelector('h1')?.textContent).toBe('Table Playground');
     expect(root.querySelector('main')?.children).toHaveLength(1);
     expect(root.querySelector('table')).toBeNull();
-    expect(root.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(
-      "Lab's Lab",
-    );
+    expect(root.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe("Lab's Lab");
     expect(document.title).toBe('Table Playground');
     expect(document.activeElement).toBe(root.querySelector('#playspace-content'));
   });

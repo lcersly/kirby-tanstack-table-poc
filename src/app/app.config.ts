@@ -1,4 +1,4 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig, LOCALE_ID, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideKirby, withGlobalSetup } from '@kirbydesign/designsystem/config';
 
@@ -9,5 +9,6 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideKirby(withGlobalSetup()),
+    { provide: LOCALE_ID, useValue: 'da-DK' },
   ],
 };
