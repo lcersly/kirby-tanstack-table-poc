@@ -15,65 +15,14 @@
   </p>
 </div>
 
-<form class="amount-filter" [formGroup]="amountForm" (ngSubmit)="applyAmountFilter()">
-  <fieldset [attr.aria-describedby]="amountError() ? 'amount-hint amount-error' : 'amount-hint'">
-    <legend>Filtrer efter beløb</legend>
-    <p id="amount-hint">
-      Vælg valuta og indtast en nedre grænse, en øvre grænse eller begge. Beløb i andre valutaer
-      vises ikke, mens filteret er aktivt. Brug komma eller punktum til decimaler.
-    </p>
-    <div class="amount-filter-controls">
-      <kirby-form-field label="Valuta">
-        <kirby-dropdown
-          formControlName="currency"
-          [items]="currencies"
-          placeholder="Vælg valuta"
-          [hasError]="amountErrorFields().includes('currency')"
-        ></kirby-dropdown>
-      </kirby-form-field>
-      <kirby-form-field label="Fra beløb">
-        <input
-          kirby-input
-          formControlName="minimum"
-          type="text"
-          inputmode="decimal"
-          autocomplete="off"
-          [hasError]="amountErrorFields().includes('minimum')"
-          [attr.aria-describedby]="amountErrorFields().includes('minimum') ? 'amount-error' : null"
-        />
-      </kirby-form-field>
-      <kirby-form-field label="Til beløb">
-        <input
-          kirby-input
-          formControlName="maximum"
-          type="text"
-          inputmode="decimal"
-          autocomplete="off"
-          [hasError]="amountErrorFields().includes('maximum')"
-          [attr.aria-describedby]="amountErrorFields().includes('maximum') ? 'amount-error' : null"
-        />
-      </kirby-form-field>
-      <button kirby-button size="sm" type="submit">Anvend beløbsfilter</button>
-      <button kirby-button size="sm" attentionLevel="3" type="button" (click)="clearAmountFilter()">
-        Ryd beløbsfilter
-      </button>
-    </div>
-    @if (amountError(); as error) {
-      <p id="amount-error" class="amount-error" role="alert">{{ error }}</p>
-    }
-    <p aria-live="polite">
-      @if (amountFilterSummary(); as summary) {
-        Aktivt beløbsfilter: {{ summary }}
-      } @else {
-        Intet aktivt beløbsfilter
-      }
-    </p>
-  </fieldset>
-</form>
+<app-payment-amount-filter
+  [activeFilter]="activeAmountFilter()"
+  (filterChange)="setAmountFilter($event)"
+/>
 
-<div class="data-grid-layout" [class.details-open]="selectedPayment()">
+<div class="data-grid-layout">
   <kirby-data-grid [table]="table" label="Syntetiske betalinger">
-    <table #gridTable class="kirby-table" kirbyDataGridTable tabindex="0">
+    <table class="kirby-table" kirbyDataGridTable tabindex="0">
       <caption class="visually-hidden">
         Syntetiske betalinger
       </caption>
@@ -94,15 +43,7 @@
       </thead>
       <tbody>
         @for (row of table.getRowModel().rows; track row.id) {
-          <tr
-            [kirbyDataGridRow]="row"
-            class="payment-row"
-            tabindex="0"
-            [class.payment-row-selected]="detailId() === row.original.id"
-            [attr.aria-label]="'Vis detaljer for betaling til ' + row.original.recipient"
-            (click)="openPayment(row.original, $event)"
-            (keydown)="onRowKeydown(row.original, $event)"
-          >
+          <tr [kirbyDataGridRow]="row">
             @for (cell of row.getAllCells(); track cell.id) {
               <td [kirbyDataGridCell]="cell" [attr.data-column-id]="cell.column.id">
                 <ng-container *flexRenderCell="cell; let value">{{ value }}</ng-container>
@@ -113,36 +54,6 @@
       </tbody>
     </table>
   </kirby-data-grid>
-
-  @if (selectedPayment(); as payment) {
-    <aside
-      class="payment-details"
-      tabindex="-1"
-      aria-labelledby="payment-details-heading"
-      (keydown.escape)="closeDetails(); $event.stopPropagation()"
-    >
-      <div class="payment-details-header">
-        <h2 id="payment-details-heading" #detailsHeading tabindex="-1">Betalingsdetaljer</h2>
-        <button kirby-button size="sm" attentionLevel="3" type="button" (click)="closeDetails()">
-          Luk detaljer
-        </button>
-      </div>
-      <dl class="payment-details-list">
-        <dt>Modtager</dt>
-        <dd>{{ payment.recipient }}</dd>
-        <dt>Dato</dt>
-        <dd>{{ payment.date }}</dd>
-        <dt>Beløb</dt>
-        <dd>{{ payment.amount }} {{ payment.currency }}</dd>
-        <dt>Betalingstype</dt>
-        <dd>{{ payment.paymentType }}</dd>
-        <dt>Modtagerkonto</dt>
-        <dd>{{ payment.destinationAccount }}</dd>
-        <dt>Status</dt>
-        <dd>{{ payment.status }}</dd>
-      </dl>
-    </aside>
-  }
 </div>
 @if (!filteredAndSortedPayments().length) {
   <p role="status">Ingen betalinger matcher de valgte filtre.</p>
